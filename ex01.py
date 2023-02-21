@@ -10,6 +10,7 @@ import ufl
 
 from helpers.plots import trisurf
 from helpers.errors import error_L2, error_H1
+from helpers.solutions import ex01_sol as u_ex_func
 
 def create_mesh(N):
 
@@ -18,7 +19,7 @@ def create_mesh(N):
     return domain
 
 
-def create_problem(domain, V, mu_val):
+def create_problem(domain, V, mu_val, SUPG=False):
 
     # Create boundary conditions:
     # Dirichlet u=0 for x=0, Dirichlet u=1 for x=1.
@@ -46,6 +47,11 @@ def create_problem(domain, V, mu_val):
     mu = fem.Constant(domain, mu_val)
     w = fem.Constant(domain, ScalarType((1.0, 0.0)))
 
+    if SUPG:
+        h = 1 / ( np.sqrt(domain.geometry.x.shape[0]) - 1.0 )
+        beta = 0.5
+        v = v + beta*h * ufl.inner(w, ufl.grad(v))
+
     f = fem.Constant(domain, ScalarType(0.0))
     g = fem.Constant(domain, ScalarType(0.0))
 
@@ -59,30 +65,29 @@ def create_problem(domain, V, mu_val):
 
     return problem
 
-mu_val = 0.3
-N = 101
-order = 2
+mu_val = 0.001
+N = 100
+order = 1
+SUPG = False
 domain = create_mesh(N)
 
-mu = fem.Constant(domain, ScalarType(mu_val))
 
-class u_ex_func:
-    def __init__(self, mu_val):
-        self.k = 1 / mu_val
-    def __call__(self, x):
-        values = ( np.exp(x[0] * self.k) - 1.0 ) / ( np.exp(self.k) - 1.0 )
-        return values
+
+
 
 V = fem.FunctionSpace(domain, ("CG", order))
 V2 = fem.FunctionSpace(domain, ("CG", order+1))
 
-problem = create_problem(domain, V, mu)
+problem = create_problem(domain, V, mu_val, SUPG=SUPG)
 
 uh = problem.solve()
 
 plotmesh = create_mesh(40)
 
-trisurf(uh, plotmesh, title="$u_h,$ pointwise")
+
+trisurf(uh, plotmesh, title="$u_h$")
+
+trisurf(u_ex_func(mu_val), plotmesh, title=r"$u_\mathrm{ex}$")
 
 
 u_ex = fem.Function(V)
@@ -95,10 +100,7 @@ e.vector.array[:] = uh.vector.array[:] - u_ex.vector.array[:]
 trisurf(e, plotmesh, title=r"$u_h - u_\mathrm{ex},$ pointwise")
 
 
-print(error_L2(uh, u_ex_func(mu_val)))
-
-
-def conv_test(mus, Ns):
+def conv_test(mus, Ns, SUPG=False, title=None):
 
     data = np.zeros((len(mus), len(Ns), 2))
 
@@ -108,7 +110,7 @@ def conv_test(mus, Ns):
             order = 1
             domain = create_mesh(N)
             V = fem.FunctionSpace(domain, ("CG", order))
-            problem = create_problem(domain, V, mu_val)
+            problem = create_problem(domain, V, mu_val, SUPG=SUPG)
             
             uh = problem.solve()
             
@@ -118,7 +120,7 @@ def conv_test(mus, Ns):
             data[i, j, 0] = np.copy(L2)
             data[i, j, 1] = np.copy(H1)
 
-    hs = 1 / (np.array(Ns) - 1)
+    hs = 1 / np.array(Ns) # N facets per side
 
     plt.figure()
 
@@ -128,6 +130,8 @@ def conv_test(mus, Ns):
         plt.loglog(hs, data[i, :, 1], '--', label=f"$\mu={mu}, H^1$")
 
     plt.legend()
+    if title is not None:
+        plt.title(title)
 
     const_fits = np.zeros((len(mus), 2))
     order_fits = np.zeros((len(mus), 2))
@@ -147,10 +151,21 @@ def conv_test(mus, Ns):
     return const_fits, order_fits
 
 mus = [1.0, 0.3, 0.1]
-Ns = [8+1, 16+1, 32+1, 64+1]
+Ns = [8, 16, 32, 64]
 
-const_fits, order_fits = conv_test(mus, Ns)
+SUPG = False
+print(f"{SUPG=}")
+const_fits, order_fits = conv_test(mus, Ns, SUPG=SUPG, title="w/o SUPG")
+for i, mu in enumerate(mus):
+    print(f"{mu=}, ||e||_L^2 ≈ {const_fits[i,0]:.2e}*h^{order_fits[i,0]:.1f}")
+for i, mu in enumerate(mus):
+    print(f"{mu=}, ||e||_H^1 ≈ {const_fits[i,1]:.2e}*h^{order_fits[i,1]:.1f}")
 
+print()
+
+SUPG = True
+print(f"{SUPG=}")
+const_fits, order_fits = conv_test(mus, Ns, SUPG=SUPG, title="w/ SUPG")
 for i, mu in enumerate(mus):
     print(f"{mu=}, ||e||_L^2 ≈ {const_fits[i,0]:.2e}*h^{order_fits[i,0]:.1f}")
 for i, mu in enumerate(mus):
