@@ -1,18 +1,22 @@
 import numpy as np
 
 class ex01_sol:
+
     def __init__(self, mu_val):
         self.k = 1 / mu_val
         self.mu = mu_val
+
     def __call__(self, x):
         if self.mu < 0.01:
             return self.__specialized_call__(x)
         else:
             return self.__generic_call__(x)
+        
     def __generic_call__(self, x):
         """ `np.expm(x) = np.exp(x) - 1`. """
         values = np.expm1(x[0] * self.k) / np.expm1(self.k)
         return values
+    
     def __specialized_call__(self, x_in):
         """ A hacky implementation to avoid numerical issues
         when caused by dividing two extremely large numbers.
