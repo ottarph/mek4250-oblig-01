@@ -61,11 +61,11 @@ def conv_test(mus, Ns, SUPG=False, title=None):
     return const_fits, order_fits, fig, ax
 
 mus = [1.0, 0.3, 0.1]
-Ns = [8, 16, 32, 64, 128, 256]
+Ns = [8, 16, 32, 64]
 
 SUPG = False
 print(f"{SUPG=}")
-const_fits, order_fits, fig_cg, ax_cg = conv_test(mus, Ns, SUPG=SUPG, title="w/o SUPG")
+const_fits, order_fits, fig_cg, ax_cg = conv_test(mus, Ns, SUPG=SUPG, title=None)
 for i, mu in enumerate(mus):
     print(f"{mu=}, ||e||_L^2 ≈ {const_fits[i,0]:.2e}*h^{order_fits[i,0]:.2f}")
 for i, mu in enumerate(mus):
@@ -75,11 +75,17 @@ print()
 
 SUPG = True
 print(f"{SUPG=}")
-const_fits, order_fits, fig_supg, ax_supg = conv_test(mus, Ns, SUPG=SUPG, title="w/ SUPG")
+const_fits, order_fits, fig_supg, ax_supg = conv_test(mus, Ns, SUPG=SUPG, title=None)
 for i, mu in enumerate(mus):
     print(f"{mu=}, ||e||_L^2 ≈ {const_fits[i,0]:.2e}*h^{order_fits[i,0]:.2f}")
 for i, mu in enumerate(mus):
     print(f"{mu=}, ||e||_H^1 ≈ {const_fits[i,1]:.2e}*h^{order_fits[i,1]:.2f}")
 
+fig_folder = "images/"
+fig_cg.savefig(fig_folder+"ex01_cg_conv.png", dpi=200)
+fig_cg.savefig(fig_folder+"ex01_cg_conv.pdf")
+
+fig_supg.savefig(fig_folder+"ex01_supg_conv.png", dpi=200)
+fig_supg.savefig(fig_folder+"ex01_supg_conv.pdf")
 
 plt.show()
