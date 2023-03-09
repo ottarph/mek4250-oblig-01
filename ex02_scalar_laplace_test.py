@@ -51,7 +51,7 @@ def main():
     uh.name = "u_h"
 
     from dolfinx import io
-    with io.XDMFFile(mesh.comm, "output/ex02_uh_test.xdmf", "w") as xdmf:
+    with io.XDMFFile(mesh.comm, "output/ex02_uh_sLtest.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_function(uh)
 
