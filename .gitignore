@@ -130,3 +130,6 @@ dmypy.json
 
 # Figures for report
 images/
+
+# Output files for Paraview
+output/
