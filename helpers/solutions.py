@@ -7,7 +7,7 @@ class ex01_sol:
         self.mu = mu_val
 
     def __call__(self, x):
-        if self.mu < 0.01:
+        if self.mu < 0.001:
             return self.__specialized_call__(x)
         else:
             return self.__generic_call__(x)

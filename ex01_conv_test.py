@@ -46,17 +46,13 @@ def conv_test(mus, Ns, SUPG=False, title=None):
     const_fits = np.zeros((len(mus), 2))
     order_fits = np.zeros((len(mus), 2))
     for i in range(len(mus)):
-        poly = np.polynomial.polynomial.Polynomial.fit(
-            np.log(hs), np.log(data[i,:,0]), deg=1
-        )
-        const_fits[i,0] = np.exp(poly.coef[0])
-        order_fits[i,0] = poly.coef[1]
+        poly = np.polyfit(np.log(hs), np.log(data[i,:,0]), deg=1)
+        const_fits[i,0] = np.exp(poly[1])
+        order_fits[i,0] = poly[0]
 
-        poly = np.polynomial.polynomial.Polynomial.fit(
-            np.log(hs), np.log(data[i,:,1]), deg=1
-        )
-        const_fits[i,1] = np.exp(poly.coef[0])
-        order_fits[i,1] = poly.coef[1]
+        poly = np.polyfit(np.log(hs), np.log(data[i,:,1]), deg=1)
+        const_fits[i,1] = np.exp(poly[1])
+        order_fits[i,1] = poly[0]
 
     return const_fits, order_fits, fig, ax
 
@@ -68,9 +64,11 @@ print(f"{SUPG=}")
 const_fits, order_fits, fig_cg, ax_cg = conv_test(mus, Ns, SUPG=SUPG, title=None)
 for i, mu in enumerate(mus):
     print(f"{mu=}, ||e||_L^2 ≈ {const_fits[i,0]:.2e}*h^{order_fits[i,0]:.2f}")
+print()
 for i, mu in enumerate(mus):
     print(f"{mu=}, ||e||_H^1 ≈ {const_fits[i,1]:.2e}*h^{order_fits[i,1]:.2f}")
 
+print()
 print()
 
 SUPG = True
@@ -78,6 +76,7 @@ print(f"{SUPG=}")
 const_fits, order_fits, fig_supg, ax_supg = conv_test(mus, Ns, SUPG=SUPG, title=None)
 for i, mu in enumerate(mus):
     print(f"{mu=}, ||e||_L^2 ≈ {const_fits[i,0]:.2e}*h^{order_fits[i,0]:.2f}")
+print()
 for i, mu in enumerate(mus):
     print(f"{mu=}, ||e||_H^1 ≈ {const_fits[i,1]:.2e}*h^{order_fits[i,1]:.2f}")
 
