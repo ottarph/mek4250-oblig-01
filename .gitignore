@@ -133,3 +133,6 @@ images/
 
 # Output files for Paraview
 output/
+
+# Data for postprocessing
+data/

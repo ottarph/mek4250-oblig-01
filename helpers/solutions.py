@@ -57,12 +57,14 @@ class ex01_sol:
 
 class ex02_inlet_flow_BC:
     """ Inlet boundary condition of Navier-Stokes benchmark problem. """
-    def __init__(self, U_m, H=0.41):
+    def __init__(self, U_m, t=0.0, H=0.41):
         """ Inlet boundary condition of Navier-Stokes benchmark problem. """
         self.U_m = U_m
         """ Fluid velocity at inlet midpoint ``(0, H/2)``. """
         self.H = H
         """ Width of inlet. """
+        self.t = t
+        """ Current time step """
         return
     def __call__(self, x):
         return 4.0 * self.U_m * x[1] * (self.H - x[1]) / self.H**2
