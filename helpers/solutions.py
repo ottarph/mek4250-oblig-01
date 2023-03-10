@@ -66,5 +66,11 @@ class ex02_inlet_flow_BC:
         self.t = t
         """ Current time step """
         return
-    def __call__(self, x):
-        return 4.0 * self.U_m * x[1] * (self.H - x[1]) / self.H**2
+    def __call__(self, x:np.ndarray):
+        if not isinstance(x, np.ndarray):
+            return 4.0 * self.U_m * x[1] * (self.H - x[1]) / self.H**2
+        
+        values = np.zeros((2, x.shape[1]))
+        values[0] = 4.0 * self.U_m * x[1] * (self.H - x[1]) / self.H**2
+        return values
+        
