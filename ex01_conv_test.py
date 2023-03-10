@@ -5,7 +5,7 @@ from dolfinx import fem
 
 from helpers.solutions import ex01_sol as u_ex_func
 from helpers.errors import error_H1, error_L2
-from ex01_solver import create_mesh, create_problem
+from solvers.convection_diffusion import create_mesh, create_problem
 
 
 def conv_test(mus, Ns, SUPG=False, title=None):

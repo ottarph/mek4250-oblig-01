@@ -70,7 +70,7 @@ def main():
     from helpers.solutions import ex01_sol as u_ex_func
 
 
-    mu_val = 0.001
+    mu_val = 0.01
     N = 100
     order = 1
     SUPG = False
