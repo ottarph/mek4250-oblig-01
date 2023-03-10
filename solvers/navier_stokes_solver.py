@@ -89,8 +89,10 @@ class NS_Solver:
         self.it = 0
         """ Current iterate number """
 
+        self.do_initialize = do_initialize
+
         self.drag_forces = np.zeros(np.ceil((self.T - self.t0) / self.dt)\
-                                    .astype(int), dtype=PETSc.ScalarType)
+                                    .astype(int)+1, dtype=PETSc.ScalarType)
         self.pressure_diffs = np.zeros_like(self.drag_forces)
         self.flow_norms = np.zeros_like(self.drag_forces)
         self.ts = np.zeros_like(self.drag_forces, dtype=float)
@@ -101,8 +103,6 @@ class NS_Solver:
         if self.fname is not None:
             self.xdmf = io.XDMFFile(mesh.comm, self.fname, "w")
             self.xdmf.write_mesh(self.mesh)
-
-        self.do_initialize = do_initialize
 
         return
     
@@ -139,7 +139,13 @@ class NS_Solver:
         )
 
         bcs_u = [bc_u_inlet, bc_u_nonslip_walls, bc_u_nonslip_obstacle]
+        bcs_u = {
+            "inlet": bc_u_inlet,
+            "walls": bc_u_nonslip_walls,
+            "obstacle": bc_u_nonslip_obstacle
+        }
         bcs_p = [bc_p_outlet]
+        bcs_p = {"outlet": bc_p_outlet}
 
         return bcs_u, bcs_p
     
@@ -194,7 +200,7 @@ class NS_Solver:
         if self.do_initialize:
             self.initialize()
 
-        eps = 1e-7
+        eps = 1e-13
         while self.t < self.T - eps:
             self.step()
             self.t += self.dt
@@ -202,9 +208,13 @@ class NS_Solver:
 
             self.U_inlet.t = self.t
             self.ts[self.it] = self.t
-            self.drag_forces[self.it] = self.compute_drag()
-            self.pressure_diffs[self.it] = self.compute_pressure_difference()
-            self.flow_norms[self.it] = self.compute_flow_norm()
+            try:
+                """ Temporary, until they are implemented. """
+                self.drag_forces[self.it] = self.compute_drag()
+                self.pressure_diffs[self.it] = self.compute_pressure_difference()
+                self.flow_norms[self.it] = self.compute_flow_norm()
+            except:
+                pass
 
             if self.fname is not None:
                 self.xdmf.write_function(self.u_, self.t)
@@ -236,8 +246,14 @@ def main():
     U_m = 0.3
     U_inlet = inlet_flow_BC(U_m)
 
-    solver = NS_Solver(mesh, ft, V_el, Q_el, U_inlet, dt=0.1)
+    solver = NS_Solver(
+        mesh, ft, V_el, Q_el, U_inlet, dt=0.1,
+        fname="output/generic_NS.xdmf", data_fname="data/generic_NS.npy"
+    )
 
+    print(solver.bcs_u)
+    print(solver.bcs_p)
+    print(solver.bcs_p["outlet"])
 
     return
 
