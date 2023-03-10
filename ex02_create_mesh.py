@@ -13,7 +13,7 @@ from dolfinx import io
 
 import gmsh
 
-def create_mesh_variable(triangles=False):
+def create_mesh_variable(triangles=True):
 
     # Rectangle dimensions
     L = 2.2
@@ -80,16 +80,15 @@ def create_mesh_variable(triangles=False):
         gmsh.model.mesh.field.setNumbers(min_field, "FieldsList", [threshold_field])
         gmsh.model.mesh.field.setAsBackgroundMesh(min_field)
 
-        # Don't know what these do, but they make the mesh cells quadrilateral
-        gmsh.option.setNumber("Mesh.Algorithm", 8)
-        gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 2)
-        gmsh.option.setNumber("Mesh.RecombineAll", 1)
-        gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
+        if not triangles:
+            # Don't know what these do, but they make the mesh cells quadrilateral
+            # Seems to make a nice triangular mesh when not in use.
+            gmsh.option.setNumber("Mesh.Algorithm", 8)
+            gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 2)
+            gmsh.option.setNumber("Mesh.RecombineAll", 1)
+            gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
 
         gmsh.model.mesh.generate(gdim)
-        if triangles:
-            # Makes the mesh cells triangular
-            gmsh.model.mesh.split_quadrangles()
         gmsh.model.mesh.setOrder(2)
         
         gmsh.model.mesh.optimize("Netgen")
@@ -101,7 +100,7 @@ def create_mesh_variable(triangles=False):
     return mesh, ct, ft
 
 
-def create_mesh_static(h=0.05, triangles=False):
+def create_mesh_static(h=0.05, triangles=True):
 
     # Rectangle dimensions
     L = 2.2
@@ -173,9 +172,9 @@ def main():
 
     gmsh.initialize()
 
-    triangles = False
-    # mesh, ct, ft = create_mesh_variable(triangles=triangles)
-    mesh, ct, ft = create_mesh_static(h=0.05, triangles=triangles)
+    triangles = True
+    mesh, ct, ft = create_mesh_variable(triangles=triangles)
+    # mesh, ct, ft = create_mesh_static(h=0.05, triangles=triangles)
 
     gmsh.finalize()
 
