@@ -10,9 +10,9 @@ class NS_Solver:
     """
     Super-class defining Navier-Stokes solver functionality.
     """
-    def __init__(self, mesh:dolfinx.mesh.Mesh, V_el:ufl.VectorElement, 
-                 Q_el:ufl.FiniteElement, U_inlet:callable, 
-                 t0:float=0.0, T:float=8.0, dt:float=1/1600,
+    def __init__(self, mesh:dolfinx.mesh.Mesh, facet_tags,
+                 V_el:ufl.VectorElement, Q_el:ufl.FiniteElement, 
+                 U_inlet:callable, t0:float=0.0, T:float=8.0, dt:float=1/1600,
                  fname=None, data_fname=None, do_initialize=True):
         """
         Super-class defining Navier-Stokes solver functionality.
@@ -23,6 +23,13 @@ class NS_Solver:
 
         self.mesh = mesh
         """ Computational mesh of problem. """
+        self.facet_tags = facet_tags
+        """ Tags of the different parts of the boundary """
+        self.fluid_marker = 1
+        self.inlet_marker = 2
+        self.outlet_marker = 3
+        self.wall_marker = 4
+        self.obstacle_marker = 5
 
         self.H = 0.41
         self.D = 0.1
@@ -31,12 +38,15 @@ class NS_Solver:
         self.S_c_y = 0.2
         """ Problem geometry """
 
-        self.rho = 1.0
-        self.mu = 1e-3
+        self.U_inlet = U_inlet
+        """ Boundary condition ``u(0,y,t) = U_inlet(0,y)`` """
+
+        self.rho = fem.Constant(mesh, PETSc.ScalarType(1.0))
+        self.mu = fem.Constant(mesh, PETSc.ScalarType(1e-3))
         self.nu = self.mu / self.rho
-        self.U_m = U_inlet([0.0, self.H/2])
+        self.U_m = self.U_inlet([0.0, self.H/2])
         self.U_bar = 2 / 3 * self.U_m
-        self.Re = self.U_bar * self.D / self.nu
+        self.Re = self.U_bar * self.D * self.rho.value / self.mu.value
         """ Problem physical parameters """
 
         self.p_probe_1 = np.array([0.15, 0.2, 0.0])
@@ -66,8 +76,7 @@ class NS_Solver:
         self.p_.name = "ph"
         self.p_.vector.array[:] = 0.0
 
-        self.U_inlet = U_inlet
-        """ Boundary condition ``u(0,y,t) = U_inlet(0,y)`` """
+        self.bcs_u, self.bcs_p = self.make_boundary_conditions()
 
         self.t0 = t0
         """ Starting time """
@@ -80,7 +89,8 @@ class NS_Solver:
         self.it = 0
         """ Current iterate number """
 
-        self.drag_forces = np.zeros(np.ceil((self.T - self.t0) / self.dt).astype(int), dtype=PETSc.ScalarType)
+        self.drag_forces = np.zeros(np.ceil((self.T - self.t0) / self.dt)\
+                                    .astype(int), dtype=PETSc.ScalarType)
         self.pressure_diffs = np.zeros_like(self.drag_forces)
         self.flow_norms = np.zeros_like(self.drag_forces)
         self.ts = np.zeros_like(self.drag_forces, dtype=float)
@@ -95,6 +105,43 @@ class NS_Solver:
         self.do_initialize = do_initialize
 
         return
+    
+    def make_boundary_conditions(self):
+        """ Makes the Dirichlet boundary conditions. """
+        tdim = self.mesh.topology.dim
+        fdim = tdim - 1
+
+        u_inlet = fem.Function(self.V)
+        u_inlet.interpolate(self.U_inlet)
+        bc_u_inlet = fem.dirichletbc(u_inlet, fem.locate_dofs_topological(
+            self.V, fdim, self.facet_tags.find(self.inlet_marker))
+        )
+
+        bc_u_nonslip_walls = fem.dirichletbc(
+            fem.Constant(self.mesh, PETSc.ScalarType((0.0, 0.0))),
+            fem.locate_dofs_topological(
+                self.V, fdim, self.facet_tags.find(self.wall_marker)
+            ), self.V
+        )
+
+        bc_u_nonslip_obstacle = fem.dirichletbc(
+            fem.Constant(self.mesh, PETSc.ScalarType((0.0, 0.0))),
+            fem.locate_dofs_topological(
+                self.V, fdim, self.facet_tags.find(self.obstacle_marker)
+            ), self.V
+        )
+
+        bc_p_outlet = fem.dirichletbc(
+            fem.Constant(self.mesh, PETSc.ScalarType(0.0)),
+            fem.locate_dofs_topological(
+                self.Q, fdim, self.facet_tags.find(self.outlet_marker)
+            ), self.Q
+        )
+
+        bcs_u = [bc_u_inlet, bc_u_nonslip_walls, bc_u_nonslip_obstacle]
+        bcs_p = [bc_p_outlet]
+
+        return bcs_u, bcs_p
     
     def compute_drag(self):
         raise NotImplementedError()
@@ -114,7 +161,8 @@ class NS_Solver:
         it = 0
         while lift - last_lift > 0:
             if it > it_max:
-                raise RuntimeError(f"Did not reach initialized state in {it_max=} iterations")
+                raise RuntimeError(f"Did not reach initialized state"+
+                                   " in {it_max=} iterations")
             
             last_lift = np.copy(lift)
             self.step()
@@ -188,9 +236,8 @@ def main():
     U_m = 0.3
     U_inlet = inlet_flow_BC(U_m)
 
-    solver = NS_Solver(mesh, V_el, Q_el, U_inlet, dt=0.1)
+    solver = NS_Solver(mesh, ft, V_el, Q_el, U_inlet, dt=0.1)
 
-    print(solver.drag_forces)
 
     return
 
