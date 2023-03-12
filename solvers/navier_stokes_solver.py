@@ -138,13 +138,13 @@ class NS_Solver:
             ), self.Q
         )
 
-        bcs_u = [bc_u_inlet, bc_u_nonslip_walls, bc_u_nonslip_obstacle]
+        # bcs_u = [bc_u_inlet, bc_u_nonslip_walls, bc_u_nonslip_obstacle]
         bcs_u = {
             "inlet": bc_u_inlet,
             "walls": bc_u_nonslip_walls,
             "obstacle": bc_u_nonslip_obstacle
         }
-        bcs_p = [bc_p_outlet]
+        # bcs_p = [bc_p_outlet]
         bcs_p = {"outlet": bc_p_outlet}
 
         return bcs_u, bcs_p
@@ -174,9 +174,13 @@ class NS_Solver:
             self.step()
             lift = self.compute_lift()
 
-        self.drag_forces[0] = self.compute_drag()
-        self.pressure_diffs[0] = self.compute_pressure_difference()
-        self.flow_norms[0] = self.compute_flow_norm()
+        try:
+            """ Temporary, until they are implemented. """
+            self.drag_forces[0] = self.compute_drag()
+            self.pressure_diffs[0] = self.compute_pressure_difference()
+            self.flow_norms[0] = self.compute_flow_norm()
+        except:
+            pass
 
         return
     
