@@ -12,8 +12,9 @@ class NS_Solver:
     """
     def __init__(self, mesh:dolfinx.mesh.Mesh, facet_tags,
                  V_el:ufl.VectorElement, Q_el:ufl.FiniteElement, 
-                 U_inlet:callable, t0:float=0.0, T:float=8.0, dt:float=1/1600,
-                 fname=None, data_fname=None, do_initialize=True):
+                 U_inlet:callable, U_0:callable=None, t0:float=0.0, 
+                 T:float=8.0, dt:float=1/1600, fname=None, data_fname=None, 
+                 do_initialize=True):
         """
         Super-class defining Navier-Stokes solver functionality.
         ```
@@ -40,6 +41,11 @@ class NS_Solver:
 
         self.U_inlet = U_inlet
         """ Boundary condition ``u(0,y,t) = U_inlet(0,y)`` """
+
+        if U_0 is None:
+            U_0 = self.U_inlet.as_IC
+        self.U_0 = U_0
+        """ Function to set initial condition of fluid flow """
 
         self.rho = fem.Constant(mesh, PETSc.ScalarType(1.0))
         self.mu = fem.Constant(mesh, PETSc.ScalarType(1e-3))
