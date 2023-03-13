@@ -14,15 +14,8 @@ class implicit_IPCS(NS_Solver):
         self.extra_arg = extra_arg
         self.extra_kwarg = extra_kwarg
 
-        def U_0(x):
-            values = np.zeros((2, x.shape[1]), dtype=PETSc.ScalarType)
-            for i in range(x.shape[1]):
-                if np.isclose(x[0,i], 0.0) or True:
-                    x_tmp = [x[0,i], x[1,i], x[2,i]]
-                    values[0,i] = self.U_inlet(x_tmp) * np.exp(-3*x[0,i])
-            return values
         
-        self.u_.interpolate(U_0)
+        self.u_.interpolate(self.U_0)
 
         self.xdmf.write_function(self.u_, self.t)
         self.xdmf.write_function(self.p_, self.t)
@@ -191,7 +184,7 @@ def main():
     U_inlet = inlet_flow_BC(U_m)
 
     solver = implicit_IPCS(0.0,
-        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=8.0,
+        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=1.0,
         extra_kwarg=3.0,
         fname="output/SI_IPCS.xdmf", data_fname=None,
         do_initialize=False
