@@ -150,8 +150,9 @@ class implicit_IPCS(NS_Solver):
         self.u_.x.scatter_forward()
 
 
-        self.u_maxs.append(np.amax(self.u_.x.array))
-        if self.u_maxs[-1] > 1e3:
+        # self.u_maxs.append(np.amax(self.u_.x.array))
+        last_u_max = np.amax(self.u_.x.array)
+        if last_u_max > 1e3:
             print("Blow-up")
             self.finalize()
             quit()
@@ -171,14 +172,14 @@ def main():
     from helpers.solutions import ex02_inlet_flow_BC as inlet_flow_BC
 
     gmsh.initialize()
-    mesh, ct, ft = create_mesh_variable(triangles=False)
+    mesh, ct, ft = create_mesh_variable(triangles=True, lf=0.7)
     H = 0.03175
     U_inf = 0.3
     dt = 0.5 * 0.1 / U_inf * H
     dt = 1/3200
     h = 0.01054
     dt = 0.0003215
-    dt = 1 / 1600
+    dt = 1 / 160
     # mesh, ct, ft = create_mesh_static(h=h, triangles=True)
     gmsh.finalize()
     
@@ -186,13 +187,13 @@ def main():
     Q_el = ufl.FiniteElement("CG", mesh.ufl_cell(), 1)
     """ Taylor-Hook P2-P1 elements. """
 
-    U_m = 0.3
+    U_m = 1.3
     U_inlet = inlet_flow_BC(U_m)
 
     solver = implicit_IPCS(0.0,
-        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=5.0,
+        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=8.0,
         extra_kwarg=3.0,
-        fname="output/SI_IPCS.xdmf", data_fname="data/SI_IPCS.npy",
+        fname="output/SI_IPCS.xdmf", data_fname=None,
         do_initialize=False
         
     )
