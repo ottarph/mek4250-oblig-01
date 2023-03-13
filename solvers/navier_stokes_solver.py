@@ -221,6 +221,7 @@ class NS_Solver:
                     pass
 
             if self.fname is not None:
+                # print(f"{self.t=}, writing")
                 self.xdmf.write_function(self.u_, self.t)
                 self.xdmf.write_function(self.p_, self.t)
 

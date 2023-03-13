@@ -7,7 +7,7 @@ from petsc4py import PETSc
 
 from solvers.navier_stokes_solver import NS_Solver
 
-class explicit_IPCS(NS_Solver):
+class implicit_IPCS(NS_Solver):
 
     def __init__(self, extra_arg, *args, extra_kwarg=0.0, **kwargs):
         super().__init__(*args, **kwargs)
@@ -17,14 +17,15 @@ class explicit_IPCS(NS_Solver):
         def U_0(x):
             values = np.zeros((2, x.shape[1]), dtype=PETSc.ScalarType)
             for i in range(x.shape[1]):
-                if np.isclose(x[0,i], 0.0):
+                if np.isclose(x[0,i], 0.0) or True:
                     x_tmp = [x[0,i], x[1,i], x[2,i]]
-                    values[0,i] = self.U_inlet(x_tmp)
+                    values[0,i] = self.U_inlet(x_tmp) * np.exp(-3*x[0,i])
             return values
         
         self.u_.interpolate(U_0)
 
         self.xdmf.write_function(self.u_, self.t)
+        self.xdmf.write_function(self.p_, self.t)
 
 
         self.u = ufl.TrialFunction(self.V)
@@ -34,20 +35,15 @@ class explicit_IPCS(NS_Solver):
 
         self.u_s = fem.Function(self.V)
         self.phi = fem.Function(self.Q)
+        
 
-        # F_us_lhs = ufl.inner(self.u, self.v) * ufl.dx
-        # F_us_rhs = ufl.inner(self.u_, self.v) * ufl.dx
-        # F_us_rhs -= self.dt * ufl.inner(ufl.dot(self.u_, ufl.nabla_grad(self.u_)), self.v) * ufl.dx
-        # # F_us_rhs -= self.dt / self.rho * ufl.inner(ufl.nabla_grad(self.p_), self.v) * ufl.dx
-        # F_us_rhs += self.dt / self.rho * self.p_ * ufl.div(self.v) * ufl.dx
-        # # F_us_rhs += self.dt * self.nu * ufl.inner(ufl.div(ufl.nabla_grad(self.u_)), self.v) * ufl.dx@
-        # F_us_rhs += self.dt * self.nu * ufl.inner(ufl.div(ufl.grad(self.u_)), self.v) * ufl.dx
 
         F_us_lhs = ufl.inner(self.u, self.v) * ufl.dx
+        F_us_lhs += self.dt * ufl.inner( ufl.dot(self.u_, ufl.nabla_grad(self.u)), self.v ) * ufl.dx
+        F_us_lhs += self.dt * self.nu * ufl.inner(ufl.grad(self.u), ufl.grad(self.v)) * ufl.dx
+
         F_us_rhs = ufl.inner(self.u_, self.v) * ufl.dx
-        F_us_rhs -= self.dt * ufl.inner( ufl.dot(self.u_, ufl.nabla_grad(self.u_)), self.v ) * ufl.dx
         F_us_rhs += self.dt / self.rho * self.p_ * ufl.div(self.v) * ufl.dx
-        F_us_rhs -= self.nu * self.dt * ufl.inner(self.u_, self.v) * ufl.dx
 
         F_us = F_us_lhs - F_us_rhs
         self.a_us = fem.form(ufl.lhs(F_us))
@@ -86,10 +82,8 @@ class explicit_IPCS(NS_Solver):
         F_uc_lhs = ufl.inner(self.u, self.v) * ufl.dx
         F_uc_rhs = ufl.inner(self.u_s, self.v) * ufl.dx
         F_uc_rhs -= self.dt/self.rho * ufl.inner(ufl.grad(self.phi), self.v) * ufl.dx
-        # F_uc_rhs += self.dt/self.rho * self.phi * ufl.div(self.v) * ufl.dx
         self.a_uc = fem.form(ufl.lhs(F_uc_lhs - F_uc_rhs))
         self.l_uc = fem.form(ufl.rhs(F_uc_lhs - F_uc_rhs))
-        # self.bcs_uc = [self.bcs_u["inlet"], self.bcs_u["walls"], self.bcs_u["obstacle"]]
         """ Variational problem to compute u_ from phi, u_s. """
 
         self.A_uc = fem.petsc.assemble_matrix(self.a_uc)
@@ -107,10 +101,10 @@ class explicit_IPCS(NS_Solver):
     
     def step(self):
 
-        # self.A_us.zeroEntries()
-        # fem.petsc.assemble_matrix(self.A_us, self.a_us, 
-        #                           bcs=self.bcs_us)
-        # self.A_us.assemble()
+        self.A_us.zeroEntries()
+        fem.petsc.assemble_matrix(self.A_us, self.a_us, 
+                                  bcs=self.bcs_us)
+        self.A_us.assemble()
 
         with self.b_us.localForm() as loc_b:
             loc_b.set(0)
@@ -146,7 +140,6 @@ class explicit_IPCS(NS_Solver):
         self.p_.vector.axpy(1, self.phi.vector)
         self.p_.x.scatter_forward()
 
-
         with self.b_uc.localForm() as loc_b:
             loc_b.set(0)
         fem.petsc.assemble_vector(self.b_uc, self.l_uc)
@@ -157,15 +150,17 @@ class explicit_IPCS(NS_Solver):
         self.u_.x.scatter_forward()
 
 
-        self.u_maxs.append(np.amax(self.u_.x.array))
-        if self.u_maxs[-1] > 1e3:
+        # self.u_maxs.append(np.amax(self.u_.x.array))
+        last_u_max = np.amax(self.u_.x.array)
+        if last_u_max > 1e3:
             print("Blow-up")
             self.finalize()
             quit()
-        # print(self.u_maxs[-1])
 
-        if self.it % 1000 == 0:
+        if self.it % 10 == 0:
             print(self.t)
+            # print()
+            pass
         return
 
 
@@ -177,27 +172,28 @@ def main():
     from helpers.solutions import ex02_inlet_flow_BC as inlet_flow_BC
 
     gmsh.initialize()
-    # mesh, ct, ft = create_mesh_variable(triangles=True)
+    mesh, ct, ft = create_mesh_variable(triangles=True, lf=0.7)
     H = 0.03175
     U_inf = 0.3
     dt = 0.5 * 0.1 / U_inf * H
     dt = 1/3200
     h = 0.01054
     dt = 0.0003215
-    mesh, ct, ft = create_mesh_static(h=h, triangles=True)
+    dt = 1 / 160
+    # mesh, ct, ft = create_mesh_static(h=h, triangles=True)
     gmsh.finalize()
     
     V_el = ufl.VectorElement("CG", mesh.ufl_cell(), 2)
     Q_el = ufl.FiniteElement("CG", mesh.ufl_cell(), 1)
     """ Taylor-Hook P2-P1 elements. """
 
-    U_m = 0.3
+    U_m = 1.3
     U_inlet = inlet_flow_BC(U_m)
 
-    solver = explicit_IPCS(0.0,
-        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=5.0,
+    solver = implicit_IPCS(0.0,
+        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=8.0,
         extra_kwarg=3.0,
-        fname="output/IPCS.xdmf", data_fname="data/IPCS.npy",
+        fname="output/SI_IPCS.xdmf", data_fname=None,
         do_initialize=False
         
     )
