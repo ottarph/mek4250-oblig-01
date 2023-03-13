@@ -13,7 +13,7 @@ from dolfinx import io
 
 import gmsh
 
-def create_mesh_variable(triangles=True):
+def create_mesh_variable(triangles=True, lf=1.0):
 
     # Rectangle dimensions
     L = 2.2
@@ -88,6 +88,7 @@ def create_mesh_variable(triangles=True):
             gmsh.option.setNumber("Mesh.RecombineAll", 1)
             gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
 
+        gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", lf)
         gmsh.model.mesh.generate(gdim)
         gmsh.model.mesh.setOrder(2)
         
@@ -173,7 +174,7 @@ def main():
     gmsh.initialize()
 
     triangles = True
-    mesh, ct, ft = create_mesh_variable(triangles=triangles)
+    mesh, ct, ft = create_mesh_variable(triangles=triangles, lf=0.5)
     # mesh, ct, ft = create_mesh_static(h=0.05, triangles=triangles)
 
     gmsh.finalize()
