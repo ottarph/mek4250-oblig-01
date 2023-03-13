@@ -91,11 +91,11 @@ class NS_Solver:
 
         self.do_initialize = do_initialize
 
-        self.drag_forces = np.zeros(np.ceil((self.T - self.t0) / self.dt)\
-                                    .astype(int)+1, dtype=PETSc.ScalarType)
-        self.pressure_diffs = np.zeros_like(self.drag_forces)
-        self.flow_norms = np.zeros_like(self.drag_forces)
-        self.ts = np.zeros_like(self.drag_forces, dtype=float)
+        if self.data_fname is not None:
+            self.drag_forces = np.zeros(np.ceil((self.T - self.t0) / self.dt)\
+                                        .astype(int)+1, dtype=PETSc.ScalarType)
+            self.pressure_diffs = np.zeros_like(self.drag_forces)
+            self.flow_norms = np.zeros_like(self.drag_forces)
 
         self.fname = fname
         self.data_fname = data_fname
@@ -138,13 +138,11 @@ class NS_Solver:
             ), self.Q
         )
 
-        # bcs_u = [bc_u_inlet, bc_u_nonslip_walls, bc_u_nonslip_obstacle]
         bcs_u = {
             "inlet": bc_u_inlet,
             "walls": bc_u_nonslip_walls,
             "obstacle": bc_u_nonslip_obstacle
         }
-        # bcs_p = [bc_p_outlet]
         bcs_p = {"outlet": bc_p_outlet}
 
         return bcs_u, bcs_p
@@ -174,13 +172,14 @@ class NS_Solver:
             self.step()
             lift = self.compute_lift()
 
-        try:
-            """ Temporary, until they are implemented. """
-            self.drag_forces[0] = self.compute_drag()
-            self.pressure_diffs[0] = self.compute_pressure_difference()
-            self.flow_norms[0] = self.compute_flow_norm()
-        except:
-            pass
+        if self.data_fname is not None:
+            try:
+                """ Temporary, until they are implemented. """
+                self.drag_forces[0] = self.compute_drag()
+                self.pressure_diffs[0] = self.compute_pressure_difference()
+                self.flow_norms[0] = self.compute_flow_norm()
+            except:
+                pass
 
         return
     
@@ -204,21 +203,22 @@ class NS_Solver:
         if self.do_initialize:
             self.initialize()
 
-        eps = 1e-13
+        eps = 1e-9
         while self.t < self.T - eps:
             self.step()
             self.t += self.dt
             self.it += 1
 
             self.U_inlet.t = self.t
-            self.ts[self.it] = self.t
-            try:
-                """ Temporary, until they are implemented. """
-                self.drag_forces[self.it] = self.compute_drag()
-                self.pressure_diffs[self.it] = self.compute_pressure_difference()
-                self.flow_norms[self.it] = self.compute_flow_norm()
-            except:
-                pass
+
+            if self.data_fname is not None:
+                try:
+                    """ Temporary, until they are implemented. """
+                    self.drag_forces[self.it] = self.compute_drag()
+                    self.pressure_diffs[self.it] = self.compute_pressure_difference()
+                    self.flow_norms[self.it] = self.compute_flow_norm()
+                except:
+                    pass
 
             if self.fname is not None:
                 self.xdmf.write_function(self.u_, self.t)
