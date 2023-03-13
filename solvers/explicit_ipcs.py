@@ -35,11 +35,19 @@ class explicit_IPCS(NS_Solver):
         self.u_s = fem.Function(self.V)
         self.phi = fem.Function(self.Q)
 
+        # F_us_lhs = ufl.inner(self.u, self.v) * ufl.dx
+        # F_us_rhs = ufl.inner(self.u_, self.v) * ufl.dx
+        # F_us_rhs -= self.dt * ufl.inner(ufl.dot(self.u_, ufl.nabla_grad(self.u_)), self.v) * ufl.dx
+        # # F_us_rhs -= self.dt / self.rho * ufl.inner(ufl.nabla_grad(self.p_), self.v) * ufl.dx
+        # F_us_rhs += self.dt / self.rho * self.p_ * ufl.div(self.v) * ufl.dx
+        # # F_us_rhs += self.dt * self.nu * ufl.inner(ufl.div(ufl.nabla_grad(self.u_)), self.v) * ufl.dx@
+        # F_us_rhs += self.dt * self.nu * ufl.inner(ufl.div(ufl.grad(self.u_)), self.v) * ufl.dx
+
         F_us_lhs = ufl.inner(self.u, self.v) * ufl.dx
         F_us_rhs = ufl.inner(self.u_, self.v) * ufl.dx
-        F_us_rhs -= self.dt * ufl.inner(ufl.dot(self.u_, ufl.nabla_grad(self.u_)), self.v) * ufl.dx
-        F_us_rhs -= self.dt / self.rho * ufl.inner(ufl.nabla_grad(self.p_), self.v) * ufl.dx
-        F_us_rhs += self.dt * self.nu * ufl.inner(ufl.div(ufl.nabla_grad(self.u_)), self.v) * ufl.dx
+        F_us_rhs -= self.dt * ufl.inner( ufl.dot(self.u_, ufl.nabla_grad(self.u_)), self.v ) * ufl.dx
+        F_us_rhs += self.dt / self.rho * self.p_ * ufl.div(self.v) * ufl.dx
+        F_us_rhs -= self.nu * self.dt * ufl.inner(self.u_, self.v) * ufl.dx
 
         F_us = F_us_lhs - F_us_rhs
         self.a_us = fem.form(ufl.lhs(F_us))
@@ -75,15 +83,16 @@ class explicit_IPCS(NS_Solver):
         self.solver_phi.getPC().setHYPREType("boomeramg")
 
 
-        self.F_uc_lhs = ufl.inner(self.u, self.v) * ufl.dx
-        self.F_uc_rhs = ufl.inner(self.u_s, self.v) * ufl.dx
-        self.F_uc_rhs -= self.dt/self.rho * ufl.inner(ufl.nabla_grad(self.phi), self.v) * ufl.dx
-        self.a_uc = fem.form(ufl.lhs(self.F_uc_lhs - self.F_uc_rhs))
-        self.l_uc = fem.form(ufl.rhs(self.F_uc_lhs - self.F_uc_rhs))
-        self.bcs_uc = [self.bcs_u["inlet"], self.bcs_u["walls"], self.bcs_u["obstacle"]]
+        F_uc_lhs = ufl.inner(self.u, self.v) * ufl.dx
+        F_uc_rhs = ufl.inner(self.u_s, self.v) * ufl.dx
+        F_uc_rhs -= self.dt/self.rho * ufl.inner(ufl.grad(self.phi), self.v) * ufl.dx
+        # F_uc_rhs += self.dt/self.rho * self.phi * ufl.div(self.v) * ufl.dx
+        self.a_uc = fem.form(ufl.lhs(F_uc_lhs - F_uc_rhs))
+        self.l_uc = fem.form(ufl.rhs(F_uc_lhs - F_uc_rhs))
+        # self.bcs_uc = [self.bcs_u["inlet"], self.bcs_u["walls"], self.bcs_u["obstacle"]]
         """ Variational problem to compute u_ from phi, u_s. """
 
-        self.A_uc = fem.petsc.assemble_matrix(self.a_uc)#, bcs=self.bcs_uc
+        self.A_uc = fem.petsc.assemble_matrix(self.a_uc)
         self.A_uc.assemble()
         self.b_uc = fem.petsc.create_vector(self.l_uc)
 
@@ -111,20 +120,10 @@ class explicit_IPCS(NS_Solver):
                             mode=PETSc.ScatterMode.REVERSE)
         fem.petsc.set_bc(self.b_us, self.bcs_us) 
 
-        # self.u_s.x.array[:] = 0.0
-        # Solve linear problem
+
         self.solver_us.solve(self.b_us, self.u_s.vector)
         self.u_s.x.scatter_forward()
-        # print(f"{self.t=}")
-        # print(np.linalg.norm(self.b_us.array))
-        # print(np.linalg.norm(self.u_s.x.array))
-        # print()
 
-
-        # self.A_phi.zeroEntries()
-        # fem.petsc.assemble_matrix(self.A_phi, self.a_phi, 
-        #                           bcs=self.bcs_phi)
-        # self.A_phi.assemble()
 
         # Update the right hand side reusing the initial vector
         with self.b_phi.localForm() as loc_b:
@@ -138,57 +137,35 @@ class explicit_IPCS(NS_Solver):
         fem.petsc.set_bc(self.b_phi, self.bcs_phi)    
 
 
-        # self.phi.x.array[:] = 0.0
         # Solve linear problem
         self.solver_phi.solve(self.b_phi, self.phi.vector)
         self.phi.x.scatter_forward()
 
-        # print(np.linalg.norm(self.b_phi.array))
-        # print(np.linalg.norm(self.phi.x.array))
-        # print()
 
         # Update pressure vector
-        # self.p_.x.array[:] += self.phi.x.array[:]
-        # self.p_.x.scatter_forward()
-        # alternative:
         self.p_.vector.axpy(1, self.phi.vector)
         self.p_.x.scatter_forward()
 
-        # self.A_uc.zeroEntries()
-        # fem.petsc.assemble_matrix(self.a_uc, bcs=self.bcs_uc)
-        # self.A_uc.assemble()
 
         with self.b_uc.localForm() as loc_b:
             loc_b.set(0)
         fem.petsc.assemble_vector(self.b_uc, self.l_uc)
-
-        # Apply Dirichlet boundary condition to the vector
-        # fem.petsc.apply_lifting(self.b_uc, [self.a_uc], [self.bcs_uc])
         self.b_uc.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, 
                               mode=PETSc.ScatterMode.REVERSE)
-        # fem.petsc.set_bc(self.b_uc, self.bcs_uc)   
 
-
-        # lhs = ufl.lhs(self.F_uc_lhs - self.F_uc_rhs)
-        # rhs = ufl.rhs(self.F_uc_lhs - self.F_uc_rhs)
-        # uc_prob = fem.petsc.LinearProblem(lhs, rhs, bcs=self.bcs_uc)
-        # tmp = uc_prob.solve()
-
-        # self.u_.x.array[:] = tmp.x.array[:]
-
-
-        # self.u_.x.array[:] = 0.0
         self.solver_uc.solve(self.b_uc, self.u_.vector)
         self.u_.x.scatter_forward()
 
-        # print(np.linalg.norm(self.b_uc.array))
-        # print(np.linalg.norm(self.u_.x.array))
-        # print()
 
         self.u_maxs.append(np.amax(self.u_.x.array))
-        print(self.u_maxs[-1])
-        # print()
+        if self.u_maxs[-1] > 1e3:
+            print("Blow-up")
+            self.finalize()
+            quit()
+        # print(self.u_maxs[-1])
 
+        if self.it % 1000 == 0:
+            print(self.t)
         return
 
 
@@ -201,7 +178,13 @@ def main():
 
     gmsh.initialize()
     # mesh, ct, ft = create_mesh_variable(triangles=True)
-    mesh, ct, ft = create_mesh_static(h=0.04, triangles=True)
+    H = 0.03175
+    U_inf = 0.3
+    dt = 0.5 * 0.1 / U_inf * H
+    dt = 1/3200
+    h = 0.01054
+    dt = 0.0003215
+    mesh, ct, ft = create_mesh_static(h=h, triangles=True)
     gmsh.finalize()
     
     V_el = ufl.VectorElement("CG", mesh.ufl_cell(), 2)
@@ -212,21 +195,15 @@ def main():
     U_inlet = inlet_flow_BC(U_m)
 
     solver = explicit_IPCS(0.0,
-        mesh, ft, V_el, Q_el, U_inlet, dt=0.001, T=1.0,
+        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=5.0,
         extra_kwarg=3.0,
         fname="output/IPCS.xdmf", data_fname="data/IPCS.npy",
         do_initialize=False
         
     )
 
-    # print(f"{solver.extra_arg=}")
-    # print(f"{solver.extra_kwarg=}")
-
-    # for _ in range(5):
-    #     print("bar")
-    #     solver.step()
     solver.run()
-    print(solver.u_maxs)
+    # print(solver.u_maxs)
 
     return
 
