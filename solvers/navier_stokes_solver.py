@@ -91,14 +91,14 @@ class NS_Solver:
 
         self.do_initialize = do_initialize
 
+        self.fname = fname
+        self.data_fname = data_fname
+
         if self.data_fname is not None:
             self.drag_forces = np.zeros(np.ceil((self.T - self.t0) / self.dt)\
                                         .astype(int)+1, dtype=PETSc.ScalarType)
             self.pressure_diffs = np.zeros_like(self.drag_forces)
             self.flow_norms = np.zeros_like(self.drag_forces)
-
-        self.fname = fname
-        self.data_fname = data_fname
 
         if self.fname is not None:
             self.xdmf = io.XDMFFile(mesh.comm, self.fname, "w")
