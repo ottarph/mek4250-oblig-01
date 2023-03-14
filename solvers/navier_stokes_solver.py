@@ -228,6 +228,9 @@ class NS_Solver:
             np.savetxt(self.data_fname, arr)
 
         return
+    
+    def check_blow_up(self):
+        return np.amax(self.u_.vector.array) > 1e3
 
     def run(self):
 
@@ -256,6 +259,10 @@ class NS_Solver:
                 self.xdmf.write_function(self.p_, self.t)
 
             self.log()
+
+            if self.check_blow_up():
+                print(f"Solution blown up at t={self.t}")
+                break
 
         self.finalize()
 

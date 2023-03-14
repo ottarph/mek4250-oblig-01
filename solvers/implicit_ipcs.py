@@ -135,14 +135,6 @@ class implicit_IPCS(NS_Solver):
         self.solver_uc.solve(self.b_uc, self.u_.vector)
         self.u_.x.scatter_forward()
 
-
-        # self.u_maxs.append(np.amax(self.u_.x.array))
-        last_u_max = np.amax(self.u_.x.array)
-        if last_u_max > 1e3:
-            print("Blow-up")
-            self.finalize()
-            quit()
-
         return
     
     def log(self):
