@@ -198,7 +198,7 @@ def main():
         mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=5.0,
         extra_kwarg=3.0,
         fname="output/IPCS.xdmf", data_fname="data/IPCS.npy",
-        do_initialize=False
+        do_warm_up=False
         
     )
 

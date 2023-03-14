@@ -14,12 +14,6 @@ class implicit_IPCS(NS_Solver):
         self.extra_arg = extra_arg
         self.extra_kwarg = extra_kwarg
 
-        
-        self.u_.interpolate(self.U_0)
-
-        self.xdmf.write_function(self.u_, self.t)
-        self.xdmf.write_function(self.p_, self.t)
-
 
         self.u = ufl.TrialFunction(self.V)
         self.v = ufl.TestFunction(self.V)
@@ -29,7 +23,6 @@ class implicit_IPCS(NS_Solver):
         self.u_s = fem.Function(self.V)
         self.phi = fem.Function(self.Q)
         
-
 
         F_us_lhs = ufl.inner(self.u, self.v) * ufl.dx
         F_us_lhs += self.dt * ufl.inner( ufl.dot(self.u_, ufl.nabla_grad(self.u)), self.v ) * ufl.dx
@@ -150,7 +143,7 @@ class implicit_IPCS(NS_Solver):
             self.finalize()
             quit()
 
-        if self.it % 10 == 0:
+        if (self.it+1) % 10 == 0:
             print(self.t)
             # print()
             pass
@@ -183,10 +176,11 @@ def main():
         mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=5.0,
         extra_kwarg=3.0,
         fname="output/SI_IPCS.xdmf", data_fname="data/SI_IPCS.npy",
-        do_initialize=False
+        do_warm_up=False, warm_up_iterations=20
     )
 
     solver.run()
+    print(solver.warm_up_iterations)
 
     import matplotlib.pyplot as plt
     drags = solver.drag_forces

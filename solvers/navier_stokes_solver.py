@@ -15,7 +15,7 @@ class NS_Solver:
                  V_el:ufl.VectorElement, Q_el:ufl.FiniteElement, 
                  U_inlet:callable, U_0:callable=None, t0:float=0.0, 
                  T:float=8.0, dt:float=1/1600, fname=None, data_fname=None, 
-                 do_initialize=True):
+                 do_warm_up=False, warm_up_iterations=None):
         """
         Super-class defining Navier-Stokes solver functionality.
         ```
@@ -117,7 +117,10 @@ class NS_Solver:
         self.it = 0
         """ Current iterate number """
 
-        self.do_initialize = do_initialize
+        self.do_warm_up = do_warm_up
+        if warm_up_iterations is None:
+            warm_up_iterations = np.ceil(self.L / (self.U_m*self.dt)).astype(int)
+        self.warm_up_iterations = warm_up_iterations
 
         self.fname = fname
         self.data_fname = data_fname
@@ -187,18 +190,17 @@ class NS_Solver:
     def compute_pressure_difference():
         raise NotImplementedError()
     
-    def initialize(self, it_max=100):
-        last_lift = -np.inf
-        lift = self.compute_lift()
-        it = 0
-        while lift - last_lift > 0:
-            if it > it_max:
-                raise RuntimeError(f"Did not reach initialized state"+
-                                   " in {it_max=} iterations")
-            
-            last_lift = np.copy(lift)
-            self.step()
-            lift = self.compute_lift()
+    def initialize(self):
+
+        self.u_.interpolate(self.U_0)
+
+        if self.do_warm_up:
+            for _ in range(self.warm_up_iterations):
+                self.step()
+
+        if self.fname is not None:
+            self.xdmf.write_function(self.u_, self.t0)
+            self.xdmf.write_function(self.p_, self.t0)
 
         if self.data_fname is not None:
             self.ts[0] = self.t0
@@ -229,8 +231,7 @@ class NS_Solver:
 
     def run(self):
 
-        if self.do_initialize:
-            self.initialize()
+        self.initialize()
 
         eps = 1e-3 * self.dt
         while self.t < self.T - eps:
