@@ -9,10 +9,10 @@ from solvers.navier_stokes_solver import NS_Solver
 
 class implicit_IPCS(NS_Solver):
 
-    def __init__(self, extra_arg, *args, extra_kwarg=0.0, **kwargs):
+    def __init__(self, extra_arg, *args, log_interval=100, **kwargs):
         super().__init__(*args, **kwargs)
         self.extra_arg = extra_arg
-        self.extra_kwarg = extra_kwarg
+        self.log_interval = log_interval
 
 
         self.u = ufl.TrialFunction(self.V)
@@ -143,11 +143,11 @@ class implicit_IPCS(NS_Solver):
             self.finalize()
             quit()
 
-        if (self.it+1) % 10 == 0:
-            print(self.t)
-            # print()
-            pass
         return
+    
+    def log(self):
+        if self.it % self.log_interval == 0:
+            print(f"t={self.t:.3f}")
 
 
 
@@ -174,13 +174,12 @@ def main():
 
     solver = implicit_IPCS(0.0,
         mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=5.0,
-        extra_kwarg=3.0,
+        log_interval=100,
         fname="output/SI_IPCS.xdmf", data_fname="data/SI_IPCS.npy",
         do_warm_up=False, warm_up_iterations=20
     )
 
     solver.run()
-    print(solver.warm_up_iterations)
 
     import matplotlib.pyplot as plt
     drags = solver.drag_forces

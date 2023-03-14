@@ -255,12 +255,17 @@ class NS_Solver:
                 self.xdmf.write_function(self.u_, self.t)
                 self.xdmf.write_function(self.p_, self.t)
 
+            self.log()
+
         self.finalize()
 
         return
     
     def step(self):
         raise NotImplementedError()
+    
+    def log(self):
+        pass
     
 
     
