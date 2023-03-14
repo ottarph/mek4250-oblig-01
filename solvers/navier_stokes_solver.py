@@ -4,6 +4,7 @@ import ufl
 import dolfinx
 from dolfinx import fem, io, geometry
 from petsc4py import PETSc
+from mpi4py import MPI
 
 
 class NS_Solver:
@@ -84,6 +85,27 @@ class NS_Solver:
 
         self.bcs_u, self.bcs_p = self.make_boundary_conditions()
 
+        self.dObs = ufl.Measure("exterior_facet", domain=self.mesh, 
+                                subdomain_id=self.obstacle_marker, 
+                                subdomain_data=self.facet_tags)
+        """ Integration measure over cylinder obstacle. """
+        self.n = -ufl.FacetNormal(self.mesh)
+        """ Inward pointing boundary normal vector. """
+        self.t = ufl.as_vector((self.n[1], -self.n[0]))
+        """ Boundary tangent vector. """
+        self.u_t = ufl.inner(self.t, self.u_)
+        """ Flow tangential velocity. """
+        self.drag_form = fem.form( (
+            self.mu * ufl.inner(ufl.grad(self.u_t), self.n) * self.n[1] \
+            - self.p_ * self.n[0]
+        ) * self.dObs )
+        """ Form for computing drag. """
+        self.lift_form = fem.form((
+            -self.mu * ufl.inner(ufl.grad(self.u_t), self.n) * self.n[0] \
+            - self.p_ * self.n[1]
+        ) * self.dObs )
+        """ Form for computing lift. """
+
         self.t0 = t0
         """ Starting time """
         self.T = T
@@ -103,8 +125,9 @@ class NS_Solver:
         if self.data_fname is not None:
             self.drag_forces = np.zeros(np.ceil((self.T - self.t0) / self.dt)\
                                         .astype(int)+1, dtype=PETSc.ScalarType)
+            self.lift_forces = np.zeros_like(self.drag_forces)
             self.pressure_diffs = np.zeros_like(self.drag_forces)
-            self.flow_norms = np.zeros_like(self.drag_forces)
+            self.ts = np.zeros_like(self.drag_forces)
 
         if self.fname is not None:
             self.xdmf = io.XDMFFile(mesh.comm, self.fname, "w")
@@ -154,15 +177,14 @@ class NS_Solver:
         return bcs_u, bcs_p
     
     def compute_drag(self):
-        raise NotImplementedError()
+        F_d = fem.assemble_scalar(self.drag_form)
+        return self.mesh.comm.reduce(F_d, op=MPI.SUM, root=0)
     
     def compute_lift(self):
-        raise NotImplementedError()
+        F_l = fem.assemble_scalar(self.lift_form)
+        return self.mesh.comm.reduce(F_l, op=MPI.SUM, root=0)
     
     def compute_pressure_difference():
-        raise NotImplementedError()
-    
-    def compute_flow_norm():
         raise NotImplementedError()
     
     def initialize(self, it_max=100):
@@ -179,11 +201,12 @@ class NS_Solver:
             lift = self.compute_lift()
 
         if self.data_fname is not None:
+            self.ts[0] = self.t0
+            self.drag_forces[0] = self.compute_drag()
+            self.lift_forces[0] = self.compute_lift()
             try:
-                """ Temporary, until they are implemented. """
-                self.drag_forces[0] = self.compute_drag()
+                """ Temporary, until implemented. """
                 self.pressure_diffs[0] = self.compute_pressure_difference()
-                self.flow_norms[0] = self.compute_flow_norm()
             except:
                 pass
 
@@ -198,8 +221,8 @@ class NS_Solver:
             arr = np.zeros((self.drag_forces.shape[0], 4), dtype=float)
             arr[:,0] = self.ts
             arr[:,1] = self.drag_forces
-            arr[:,2] = self.pressure_diffs
-            arr[:,3] = self.flow_norms
+            arr[:,2] = self.lift_forces
+            arr[:,3] = self.pressure_diffs
             np.savetxt(self.data_fname, arr)
 
         return
@@ -209,7 +232,7 @@ class NS_Solver:
         if self.do_initialize:
             self.initialize()
 
-        eps = 1e-9
+        eps = 1e-3 * self.dt
         while self.t < self.T - eps:
             self.step()
             self.t += self.dt
@@ -218,16 +241,16 @@ class NS_Solver:
             self.U_inlet.t = self.t
 
             if self.data_fname is not None:
+                self.ts[self.it] = self.t
+                self.drag_forces[self.it] = self.compute_drag()
+                self.lift_forces[self.it] = self.compute_lift()
                 try:
-                    """ Temporary, until they are implemented. """
-                    self.drag_forces[self.it] = self.compute_drag()
+                    """ Temporary, until implemented. """
                     self.pressure_diffs[self.it] = self.compute_pressure_difference()
-                    self.flow_norms[self.it] = self.compute_flow_norm()
                 except:
                     pass
 
             if self.fname is not None:
-                # print(f"{self.t=}, writing")
                 self.xdmf.write_function(self.u_, self.t)
                 self.xdmf.write_function(self.p_, self.t)
 
@@ -261,10 +284,6 @@ def main():
         mesh, ft, V_el, Q_el, U_inlet, dt=0.1,
         fname="output/generic_NS.xdmf", data_fname="data/generic_NS.npy"
     )
-
-    print(solver.bcs_u)
-    print(solver.bcs_p)
-    print(solver.bcs_p["outlet"])
 
     return
 

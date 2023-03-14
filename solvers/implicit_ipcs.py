@@ -165,13 +165,8 @@ def main():
     from helpers.solutions import ex02_inlet_flow_BC as inlet_flow_BC
 
     gmsh.initialize()
-    mesh, ct, ft = create_mesh_variable(triangles=True, lf=0.7)
-    H = 0.03175
-    U_inf = 0.3
-    dt = 0.5 * 0.1 / U_inf * H
-    dt = 1/3200
-    h = 0.01054
-    dt = 0.0003215
+    mesh, ct, ft = create_mesh_variable(triangles=True, lf=1.0)
+    h = 0.04
     dt = 1 / 160
     # mesh, ct, ft = create_mesh_static(h=h, triangles=True)
     gmsh.finalize()
@@ -180,19 +175,28 @@ def main():
     Q_el = ufl.FiniteElement("CG", mesh.ufl_cell(), 1)
     """ Taylor-Hook P2-P1 elements. """
 
-    U_m = 1.3
+    U_m = 1.5
     U_inlet = inlet_flow_BC(U_m)
+    """ 2D-2, unsteady flow """
 
     solver = implicit_IPCS(0.0,
-        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=1.0,
+        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=5.0,
         extra_kwarg=3.0,
-        fname="output/SI_IPCS.xdmf", data_fname=None,
+        fname="output/SI_IPCS.xdmf", data_fname="data/SI_IPCS.npy",
         do_initialize=False
-        
     )
 
     solver.run()
-    # print(solver.u_maxs)
+
+    import matplotlib.pyplot as plt
+    drags = solver.drag_forces
+    _, axs = plt.subplots(1,2)
+    axs[0].plot(range(drags.shape[0]), drags, 'k-')
+    axs[0].set_title("Drag forces")
+    lifts = solver.lift_forces
+    axs[1].plot(range(lifts.shape[0]), lifts, 'k-')
+    axs[1].set_title("Lift forces")
+    plt.show()
 
     return
 
