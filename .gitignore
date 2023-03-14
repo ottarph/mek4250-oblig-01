@@ -136,3 +136,6 @@ output/
 
 # Data for postprocessing
 data/
+
+# Animations for visualization
+animations/
