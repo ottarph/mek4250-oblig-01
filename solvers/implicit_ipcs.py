@@ -152,7 +152,7 @@ def main():
     gmsh.initialize()
     mesh, ct, ft = create_mesh_variable(triangles=True, lf=1.0)
     h = 0.04
-    dt = 1 / 160
+    dt = 1 / 160 * 10
     # mesh, ct, ft = create_mesh_static(h=h, triangles=True)
     gmsh.finalize()
     
@@ -175,12 +175,15 @@ def main():
 
     import matplotlib.pyplot as plt
     drags = solver.drag_forces
-    _, axs = plt.subplots(1,2)
+    _, axs = plt.subplots(1,3)
     axs[0].plot(range(drags.shape[0]), drags, 'k-')
     axs[0].set_title("Drag forces")
     lifts = solver.lift_forces
     axs[1].plot(range(lifts.shape[0]), lifts, 'k-')
     axs[1].set_title("Lift forces")
+    p_diffs = solver.pressure_diffs
+    axs[2].plot(range(p_diffs.shape[0]), p_diffs, 'k-')
+    axs[2].set_title("Pressure differences")
     plt.show()
 
     return

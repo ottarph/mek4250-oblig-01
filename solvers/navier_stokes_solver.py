@@ -56,11 +56,11 @@ class NS_Solver:
         self.Re = self.U_bar * self.D * self.rho.value / self.mu.value
         """ Problem physical parameters """
 
-        self.p_probe_1 = np.array([0.15, 0.2, 0.0])
-        self.p_probe_2 = np.array([0.25, 0.2, 0.0])
+        self.p_probe_front = np.array([0.15, 0.2, 0.0])
+        self.p_probe_back = np.array([0.25, 0.2, 0.0])
 
         tree = geometry.BoundingBoxTree(mesh, mesh.geometry.dim)
-        points = np.array([self.p_probe_1, self.p_probe_2])
+        points = np.array([self.p_probe_front, self.p_probe_back])
         cell_candidates = geometry.compute_collisions(tree, points)
         colliding_cells = geometry.compute_colliding_cells(mesh, 
                                             cell_candidates, points)
@@ -95,6 +95,7 @@ class NS_Solver:
         """ Boundary tangent vector. """
         self.u_t = ufl.inner(self.t, self.u_)
         """ Flow tangential velocity. """
+
         self.drag_form = fem.form( (
             self.mu * ufl.inner(ufl.grad(self.u_t), self.n) * self.n[1] \
             - self.p_ * self.n[0]
@@ -119,7 +120,8 @@ class NS_Solver:
 
         self.do_warm_up = do_warm_up
         if warm_up_iterations is None:
-            warm_up_iterations = np.ceil(self.L / (self.U_m*self.dt)).astype(int)
+            warm_up_iterations = np.ceil(self.L / (self.U_m*self.dt))\
+                                        .astype(int)
         self.warm_up_iterations = warm_up_iterations
 
         self.fname = fname
@@ -127,7 +129,7 @@ class NS_Solver:
 
         if self.data_fname is not None:
             self.drag_forces = np.zeros(np.ceil((self.T - self.t0) / self.dt)\
-                                        .astype(int)+1, dtype=PETSc.ScalarType)
+                                    .astype(int)+1, dtype=PETSc.ScalarType)
             self.lift_forces = np.zeros_like(self.drag_forces)
             self.pressure_diffs = np.zeros_like(self.drag_forces)
             self.ts = np.zeros_like(self.drag_forces)
@@ -187,8 +189,11 @@ class NS_Solver:
         F_l = fem.assemble_scalar(self.lift_form)
         return self.mesh.comm.reduce(F_l, op=MPI.SUM, root=0)
     
-    def compute_pressure_difference():
-        raise NotImplementedError()
+    def compute_pressure_difference(self):
+        """ Not MPI-safe. """
+        p_front = self.p_.eval(self.p_probe_front, self.front_cells[:1])
+        p_back = self.p_.eval(self.p_probe_back, self.back_cells[:1])
+        return p_front - p_back
     
     def initialize(self):
 
@@ -206,11 +211,7 @@ class NS_Solver:
             self.ts[0] = self.t0
             self.drag_forces[0] = self.compute_drag()
             self.lift_forces[0] = self.compute_lift()
-            try:
-                """ Temporary, until implemented. """
-                self.pressure_diffs[0] = self.compute_pressure_difference()
-            except:
-                pass
+            self.pressure_diffs[0] = self.compute_pressure_difference()
 
         return
     
@@ -248,11 +249,7 @@ class NS_Solver:
                 self.ts[self.it] = self.t
                 self.drag_forces[self.it] = self.compute_drag()
                 self.lift_forces[self.it] = self.compute_lift()
-                try:
-                    """ Temporary, until implemented. """
-                    self.pressure_diffs[self.it] = self.compute_pressure_difference()
-                except:
-                    pass
+                self.pressure_diffs[self.it] = self.compute_pressure_difference()
 
             if self.fname is not None:
                 self.xdmf.write_function(self.u_, self.t)
