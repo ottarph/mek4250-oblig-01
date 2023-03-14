@@ -4,6 +4,7 @@ import ufl
 import dolfinx
 from dolfinx import fem, io, geometry
 from petsc4py import PETSc
+from mpi4py import MPI
 
 
 class NS_Solver:
@@ -12,8 +13,9 @@ class NS_Solver:
     """
     def __init__(self, mesh:dolfinx.mesh.Mesh, facet_tags,
                  V_el:ufl.VectorElement, Q_el:ufl.FiniteElement, 
-                 U_inlet:callable, t0:float=0.0, T:float=8.0, dt:float=1/1600,
-                 fname=None, data_fname=None, do_initialize=True):
+                 U_inlet:callable, U_0:callable=None, t0:float=0.0, 
+                 T:float=8.0, dt:float=1/1600, fname=None, data_fname=None, 
+                 do_warm_up=False, warm_up_iterations=None):
         """
         Super-class defining Navier-Stokes solver functionality.
         ```
@@ -41,6 +43,11 @@ class NS_Solver:
         self.U_inlet = U_inlet
         """ Boundary condition ``u(0,y,t) = U_inlet(0,y)`` """
 
+        if U_0 is None:
+            U_0 = self.U_inlet.as_IC
+        self.U_0 = U_0
+        """ Function to set initial condition of fluid flow """
+
         self.rho = fem.Constant(mesh, PETSc.ScalarType(1.0))
         self.mu = fem.Constant(mesh, PETSc.ScalarType(1e-3))
         self.nu = self.mu / self.rho
@@ -49,11 +56,11 @@ class NS_Solver:
         self.Re = self.U_bar * self.D * self.rho.value / self.mu.value
         """ Problem physical parameters """
 
-        self.p_probe_1 = np.array([0.15, 0.2, 0.0])
-        self.p_probe_2 = np.array([0.25, 0.2, 0.0])
+        self.p_probe_front = np.array([0.15, 0.2, 0.0])
+        self.p_probe_back = np.array([0.25, 0.2, 0.0])
 
         tree = geometry.BoundingBoxTree(mesh, mesh.geometry.dim)
-        points = np.array([self.p_probe_1, self.p_probe_2])
+        points = np.array([self.p_probe_front, self.p_probe_back])
         cell_candidates = geometry.compute_collisions(tree, points)
         colliding_cells = geometry.compute_colliding_cells(mesh, 
                                             cell_candidates, points)
@@ -78,6 +85,28 @@ class NS_Solver:
 
         self.bcs_u, self.bcs_p = self.make_boundary_conditions()
 
+        self.dObs = ufl.Measure("exterior_facet", domain=self.mesh, 
+                                subdomain_id=self.obstacle_marker, 
+                                subdomain_data=self.facet_tags)
+        """ Integration measure over cylinder obstacle. """
+        self.n = -ufl.FacetNormal(self.mesh)
+        """ Inward pointing boundary normal vector. """
+        self.t = ufl.as_vector((self.n[1], -self.n[0]))
+        """ Boundary tangent vector. """
+        self.u_t = ufl.inner(self.t, self.u_)
+        """ Flow tangential velocity. """
+
+        self.drag_form = fem.form( (
+            self.mu * ufl.inner(ufl.grad(self.u_t), self.n) * self.n[1] \
+            - self.p_ * self.n[0]
+        ) * self.dObs )
+        """ Form for computing drag. """
+        self.lift_form = fem.form((
+            -self.mu * ufl.inner(ufl.grad(self.u_t), self.n) * self.n[0] \
+            - self.p_ * self.n[1]
+        ) * self.dObs )
+        """ Form for computing lift. """
+
         self.t0 = t0
         """ Starting time """
         self.T = T
@@ -89,16 +118,21 @@ class NS_Solver:
         self.it = 0
         """ Current iterate number """
 
-        self.do_initialize = do_initialize
-
-        self.drag_forces = np.zeros(np.ceil((self.T - self.t0) / self.dt)\
-                                    .astype(int)+1, dtype=PETSc.ScalarType)
-        self.pressure_diffs = np.zeros_like(self.drag_forces)
-        self.flow_norms = np.zeros_like(self.drag_forces)
-        self.ts = np.zeros_like(self.drag_forces, dtype=float)
+        self.do_warm_up = do_warm_up
+        if warm_up_iterations is None:
+            warm_up_iterations = np.ceil(self.L / (self.U_m*self.dt))\
+                                        .astype(int)
+        self.warm_up_iterations = warm_up_iterations
 
         self.fname = fname
         self.data_fname = data_fname
+
+        if self.data_fname is not None:
+            self.drag_forces = np.zeros(np.ceil((self.T - self.t0) / self.dt)\
+                                    .astype(int)+1, dtype=PETSc.ScalarType)
+            self.lift_forces = np.zeros_like(self.drag_forces)
+            self.pressure_diffs = np.zeros_like(self.drag_forces)
+            self.ts = np.zeros_like(self.drag_forces)
 
         if self.fname is not None:
             self.xdmf = io.XDMFFile(mesh.comm, self.fname, "w")
@@ -148,37 +182,36 @@ class NS_Solver:
         return bcs_u, bcs_p
     
     def compute_drag(self):
-        raise NotImplementedError()
+        F_d = fem.assemble_scalar(self.drag_form)
+        return self.mesh.comm.reduce(F_d, op=MPI.SUM, root=0)
     
     def compute_lift(self):
-        raise NotImplementedError()
+        F_l = fem.assemble_scalar(self.lift_form)
+        return self.mesh.comm.reduce(F_l, op=MPI.SUM, root=0)
     
-    def compute_pressure_difference():
-        raise NotImplementedError()
+    def compute_pressure_difference(self):
+        """ Not MPI-safe. """
+        p_front = self.p_.eval(self.p_probe_front, self.front_cells[:1])
+        p_back = self.p_.eval(self.p_probe_back, self.back_cells[:1])
+        return p_front - p_back
     
-    def compute_flow_norm():
-        raise NotImplementedError()
-    
-    def initialize(self, it_max=100):
-        last_lift = -np.inf
-        lift = self.compute_lift()
-        it = 0
-        while lift - last_lift > 0:
-            if it > it_max:
-                raise RuntimeError(f"Did not reach initialized state"+
-                                   " in {it_max=} iterations")
-            
-            last_lift = np.copy(lift)
-            self.step()
-            lift = self.compute_lift()
+    def initialize(self):
 
-        try:
-            """ Temporary, until they are implemented. """
+        self.u_.interpolate(self.U_0)
+
+        if self.do_warm_up:
+            for _ in range(self.warm_up_iterations):
+                self.step()
+
+        if self.fname is not None:
+            self.xdmf.write_function(self.u_, self.t0)
+            self.xdmf.write_function(self.p_, self.t0)
+
+        if self.data_fname is not None:
+            self.ts[0] = self.t0
             self.drag_forces[0] = self.compute_drag()
+            self.lift_forces[0] = self.compute_lift()
             self.pressure_diffs[0] = self.compute_pressure_difference()
-            self.flow_norms[0] = self.compute_flow_norm()
-        except:
-            pass
 
         return
     
@@ -191,37 +224,42 @@ class NS_Solver:
             arr = np.zeros((self.drag_forces.shape[0], 4), dtype=float)
             arr[:,0] = self.ts
             arr[:,1] = self.drag_forces
-            arr[:,2] = self.pressure_diffs
-            arr[:,3] = self.flow_norms
+            arr[:,2] = self.lift_forces
+            arr[:,3] = self.pressure_diffs
             np.savetxt(self.data_fname, arr)
 
         return
+    
+    def check_blow_up(self):
+        return np.amax(self.u_.vector.array) > 1e3
 
     def run(self):
 
-        if self.do_initialize:
-            self.initialize()
+        self.initialize()
 
-        eps = 1e-13
+        eps = 1e-3 * self.dt
         while self.t < self.T - eps:
             self.step()
             self.t += self.dt
             self.it += 1
 
             self.U_inlet.t = self.t
-            self.ts[self.it] = self.t
-            try:
-                """ Temporary, until they are implemented. """
+
+            if self.data_fname is not None:
+                self.ts[self.it] = self.t
                 self.drag_forces[self.it] = self.compute_drag()
+                self.lift_forces[self.it] = self.compute_lift()
                 self.pressure_diffs[self.it] = self.compute_pressure_difference()
-                self.flow_norms[self.it] = self.compute_flow_norm()
-            except:
-                pass
 
             if self.fname is not None:
-                # print(f"{self.t=}, writing")
                 self.xdmf.write_function(self.u_, self.t)
                 self.xdmf.write_function(self.p_, self.t)
+
+            self.log()
+
+            if self.check_blow_up():
+                print(f"Solution blown up at t={self.t}")
+                break
 
         self.finalize()
 
@@ -229,6 +267,9 @@ class NS_Solver:
     
     def step(self):
         raise NotImplementedError()
+    
+    def log(self):
+        pass
     
 
     
@@ -253,10 +294,6 @@ def main():
         mesh, ft, V_el, Q_el, U_inlet, dt=0.1,
         fname="output/generic_NS.xdmf", data_fname="data/generic_NS.npy"
     )
-
-    print(solver.bcs_u)
-    print(solver.bcs_p)
-    print(solver.bcs_p["outlet"])
 
     return
 

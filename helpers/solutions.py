@@ -73,4 +73,11 @@ class ex02_inlet_flow_BC:
         values = np.zeros((2, x.shape[1]))
         values[0] = 4.0 * self.U_m * x[1] * (self.H - x[1]) / self.H**2
         return values
+    def as_IC(self, x:np.ndarray):
+        values = np.zeros((2, x.shape[1]))
+        for i in range(x.shape[1]):
+            if np.isclose(x[0,i], 0.0):
+                x_tmp = [x[0,i], x[1,i], x[2,i]]
+                values[0,i] = self.__call__(x_tmp)
+        return values
         
