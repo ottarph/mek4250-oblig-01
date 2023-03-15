@@ -37,7 +37,7 @@ def create_mesh_variable(triangles=True, lf=1.0):
     mesh_comm = MPI.COMM_WORLD
     model_rank = 0
     if mesh_comm.rank == model_rank:
-        rectangle = gmsh.model.occ.addRectangle(0, 0, 0, L, H, tag=1)
+        rectangle = gmsh.model.occ.addRectangle(0, 0, 0, L, H)
         cylinder_obstacle = gmsh.model.occ.addDisk(c_x, c_y, 0, r, r)
 
         fluid = gmsh.model.occ.cut([(gdim, rectangle)], [(gdim, cylinder_obstacle)])
@@ -123,7 +123,7 @@ def create_mesh_static(h=0.05, triangles=True):
     mesh_comm = MPI.COMM_WORLD
     model_rank = 0
     if mesh_comm.rank == model_rank:
-        rectangle = gmsh.model.occ.addRectangle(0, 0, 0, L, H, tag=1)
+        rectangle = gmsh.model.occ.addRectangle(0, 0, 0, L, H)
         cylinder_obstacle = gmsh.model.occ.addDisk(c_x, c_y, 0, r, r)
 
         fluid = gmsh.model.occ.cut([(gdim, rectangle)], [(gdim, cylinder_obstacle)])
