@@ -90,10 +90,10 @@ class explicit_IPCS(NS_Solver):
     def step(self):
 
         # Don't need to update the left hand side matrix for the explicit stepping.
-        self.A_us.zeroEntries()
-        fem.petsc.assemble_matrix(self.A_us, self.a_us, 
-                                  bcs=self.bcs_us)
-        self.A_us.assemble()
+        # self.A_us.zeroEntries()
+        # fem.petsc.assemble_matrix(self.A_us, self.a_us, 
+        #                           bcs=self.bcs_us)
+        # self.A_us.assemble()
 
         with self.b_us.localForm() as loc_b:
             loc_b.set(0)
