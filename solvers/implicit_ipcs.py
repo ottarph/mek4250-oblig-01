@@ -151,7 +151,7 @@ def main():
     gmsh.initialize()
     # mesh, ct, ft = create_mesh_variable(triangles=True, lf=1.0)
     h = 0.04
-    dt = 1 / 1600
+    dt = 1 / 160
     mesh, ct, ft = create_mesh_static(h=h, triangles=True)
     gmsh.finalize()
     

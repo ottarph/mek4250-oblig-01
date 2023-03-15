@@ -7,7 +7,6 @@ from petsc4py import PETSc
 
 from solvers.navier_stokes_solver import NS_Solver
 
-from timeit import default_timer as timer
 
 class explicit_IPCS(NS_Solver):
 
@@ -154,7 +153,7 @@ def main():
     gmsh.initialize()
     # mesh, ct, ft = create_mesh_variable(triangles=True, lf=1.7)
     h = 0.04
-    dt = 1 / 1600
+    dt = 1 / 160
     print(f"{dt=}")
     mesh, ct, ft = create_mesh_static(h=h, triangles=True)
     gmsh.finalize()

@@ -126,6 +126,8 @@ class NS_Solver:
                                         .astype(int)
         self.warm_up_iterations = warm_up_iterations
 
+        self.blown_up = False
+
         self.fname = fname
         self.data_fname = data_fname
 
@@ -260,6 +262,7 @@ class NS_Solver:
             self.log()
 
             if self.check_blow_up():
+                self.blown_up = True
                 print(f"Solution blown up at t={self.t}")
                 break
 
