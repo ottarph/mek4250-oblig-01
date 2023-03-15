@@ -9,9 +9,8 @@ from solvers.navier_stokes_solver import NS_Solver
 
 class implicit_IPCS(NS_Solver):
 
-    def __init__(self, extra_arg, *args, log_interval=100, **kwargs):
+    def __init__(self, *args, log_interval=100, **kwargs):
         super().__init__(*args, **kwargs)
-        self.extra_arg = extra_arg
         self.log_interval = log_interval
 
 
@@ -164,7 +163,7 @@ def main():
     U_inlet = inlet_flow_BC(U_m)
     """ 2D-2, unsteady flow """
 
-    solver = implicit_IPCS(0.0,
+    solver = implicit_IPCS(
         mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=1.0,
         log_interval=100,
         fname="output/SI_IPCS.xdmf", data_fname="data/SI_IPCS.npy",
