@@ -51,6 +51,8 @@ class NS_Solver:
         self.rho = fem.Constant(mesh, PETSc.ScalarType(1.0))
         self.mu = fem.Constant(mesh, PETSc.ScalarType(1e-3))
         self.nu = self.mu / self.rho
+        self.k = fem.Constant(mesh, PETSc.ScalarType(dt))
+        """ Time step size. """
         self.U_m = self.U_inlet([0.0, self.H/2])
         self.U_bar = 2 / 3 * self.U_m
         self.Re = self.U_bar * self.D * self.rho.value / self.mu.value
