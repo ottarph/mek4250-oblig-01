@@ -9,22 +9,10 @@ from solvers.navier_stokes_solver import NS_Solver
 
 class explicit_IPCS(NS_Solver):
 
-    def __init__(self, extra_arg, *args, extra_kwarg=0.0, **kwargs):
+    def __init__(self, extra_arg, *args, log_interval=100, **kwargs):
         super().__init__(*args, **kwargs)
         self.extra_arg = extra_arg
-        self.extra_kwarg = extra_kwarg
-
-        def U_0(x):
-            values = np.zeros((2, x.shape[1]), dtype=PETSc.ScalarType)
-            for i in range(x.shape[1]):
-                if np.isclose(x[0,i], 0.0):
-                    x_tmp = [x[0,i], x[1,i], x[2,i]]
-                    values[0,i] = self.U_inlet(x_tmp)
-            return values
-        
-        self.u_.interpolate(U_0)
-
-        self.xdmf.write_function(self.u_, self.t)
+        self.log_interval = log_interval
 
 
         self.u = ufl.TrialFunction(self.V)
@@ -34,20 +22,14 @@ class explicit_IPCS(NS_Solver):
 
         self.u_s = fem.Function(self.V)
         self.phi = fem.Function(self.Q)
-
-        # F_us_lhs = ufl.inner(self.u, self.v) * ufl.dx
-        # F_us_rhs = ufl.inner(self.u_, self.v) * ufl.dx
-        # F_us_rhs -= self.dt * ufl.inner(ufl.dot(self.u_, ufl.nabla_grad(self.u_)), self.v) * ufl.dx
-        # # F_us_rhs -= self.dt / self.rho * ufl.inner(ufl.nabla_grad(self.p_), self.v) * ufl.dx
-        # F_us_rhs += self.dt / self.rho * self.p_ * ufl.div(self.v) * ufl.dx
-        # # F_us_rhs += self.dt * self.nu * ufl.inner(ufl.div(ufl.nabla_grad(self.u_)), self.v) * ufl.dx@
-        # F_us_rhs += self.dt * self.nu * ufl.inner(ufl.div(ufl.grad(self.u_)), self.v) * ufl.dx
+        
 
         F_us_lhs = ufl.inner(self.u, self.v) * ufl.dx
+
         F_us_rhs = ufl.inner(self.u_, self.v) * ufl.dx
-        F_us_rhs -= self.dt * ufl.inner( ufl.dot(self.u_, ufl.nabla_grad(self.u_)), self.v ) * ufl.dx
-        F_us_rhs += self.dt / self.rho * self.p_ * ufl.div(self.v) * ufl.dx
-        F_us_rhs -= self.nu * self.dt * ufl.inner(self.u_, self.v) * ufl.dx
+        F_us_rhs -= self.k * ufl.inner( ufl.dot(self.u_, ufl.nabla_grad(self.u_)), self.v ) * ufl.dx
+        F_us_rhs += self.k / self.rho * self.p_ * ufl.div(self.v) * ufl.dx
+        F_us_rhs -= self.k * self.nu * ufl.inner(ufl.grad(self.u_), ufl.grad(self.v)) * ufl.dx
 
         F_us = F_us_lhs - F_us_rhs
         self.a_us = fem.form(ufl.lhs(F_us))
@@ -65,7 +47,7 @@ class explicit_IPCS(NS_Solver):
         self.solver_us.getPC().setType(PETSc.PC.Type.JACOBI)
 
         
-        self.f1 = -self.rho / self.dt * ufl.div(self.u_s)
+        self.f1 = -self.rho / self.k * ufl.div(self.u_s)
 
         self.a_phi = fem.form(ufl.inner(ufl.grad(self.p), ufl.grad(self.q)) * ufl.dx)
         self.l_phi = fem.form(self.f1 * self.q * ufl.dx)
@@ -85,11 +67,9 @@ class explicit_IPCS(NS_Solver):
 
         F_uc_lhs = ufl.inner(self.u, self.v) * ufl.dx
         F_uc_rhs = ufl.inner(self.u_s, self.v) * ufl.dx
-        F_uc_rhs -= self.dt/self.rho * ufl.inner(ufl.grad(self.phi), self.v) * ufl.dx
-        # F_uc_rhs += self.dt/self.rho * self.phi * ufl.div(self.v) * ufl.dx
+        F_uc_rhs -= self.k/self.rho * ufl.inner(ufl.grad(self.phi), self.v) * ufl.dx
         self.a_uc = fem.form(ufl.lhs(F_uc_lhs - F_uc_rhs))
         self.l_uc = fem.form(ufl.rhs(F_uc_lhs - F_uc_rhs))
-        # self.bcs_uc = [self.bcs_u["inlet"], self.bcs_u["walls"], self.bcs_u["obstacle"]]
         """ Variational problem to compute u_ from phi, u_s. """
 
         self.A_uc = fem.petsc.assemble_matrix(self.a_uc)
@@ -101,16 +81,17 @@ class explicit_IPCS(NS_Solver):
         self.solver_uc.setType(PETSc.KSP.Type.CG)
         self.solver_uc.getPC().setType(PETSc.PC.Type.SOR)
 
-        self.u_maxs = []
+        # self.u_maxs = []
 
         return
     
     def step(self):
 
-        # self.A_us.zeroEntries()
-        # fem.petsc.assemble_matrix(self.A_us, self.a_us, 
-        #                           bcs=self.bcs_us)
-        # self.A_us.assemble()
+        # Don't need to update the left hand side matrix for the explicit stepping.
+        self.A_us.zeroEntries()
+        fem.petsc.assemble_matrix(self.A_us, self.a_us, 
+                                  bcs=self.bcs_us)
+        self.A_us.assemble()
 
         with self.b_us.localForm() as loc_b:
             loc_b.set(0)
@@ -146,7 +127,6 @@ class explicit_IPCS(NS_Solver):
         self.p_.vector.axpy(1, self.phi.vector)
         self.p_.x.scatter_forward()
 
-
         with self.b_uc.localForm() as loc_b:
             loc_b.set(0)
         fem.petsc.assemble_vector(self.b_uc, self.l_uc)
@@ -156,17 +136,11 @@ class explicit_IPCS(NS_Solver):
         self.solver_uc.solve(self.b_uc, self.u_.vector)
         self.u_.x.scatter_forward()
 
-
-        self.u_maxs.append(np.amax(self.u_.x.array))
-        if self.u_maxs[-1] > 1e3:
-            print("Blow-up")
-            self.finalize()
-            quit()
-        # print(self.u_maxs[-1])
-
-        if self.it % 1000 == 0:
-            print(self.t)
         return
+    
+    def log(self):
+        if self.it % self.log_interval == 0:
+            print(f"t={self.t:.3f}")
 
 
 
@@ -177,13 +151,10 @@ def main():
     from helpers.solutions import ex02_inlet_flow_BC as inlet_flow_BC
 
     gmsh.initialize()
-    # mesh, ct, ft = create_mesh_variable(triangles=True)
-    H = 0.03175
-    U_inf = 0.3
-    dt = 0.5 * 0.1 / U_inf * H
-    dt = 1/3200
-    h = 0.01054
-    dt = 0.0003215
+    # mesh, ct, ft = create_mesh_variable(triangles=True, lf=1.7)
+    h = 0.04
+    dt = 1 / 1600
+    print(f"{dt=}")
     mesh, ct, ft = create_mesh_static(h=h, triangles=True)
     gmsh.finalize()
     
@@ -191,19 +162,31 @@ def main():
     Q_el = ufl.FiniteElement("CG", mesh.ufl_cell(), 1)
     """ Taylor-Hook P2-P1 elements. """
 
-    U_m = 0.3
+    U_m = 1.5
     U_inlet = inlet_flow_BC(U_m)
+    """ 2D-2, unsteady flow """
 
     solver = explicit_IPCS(0.0,
-        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=5.0,
-        extra_kwarg=3.0,
-        fname="output/IPCS.xdmf", data_fname="data/IPCS.npy",
-        do_warm_up=False
-        
+        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=1.0,
+        log_interval=100,
+        fname="output/E_IPCS.xdmf", data_fname="data/E_IPCS.npy",
+        do_warm_up=False, warm_up_iterations=20
     )
 
     solver.run()
-    # print(solver.u_maxs)
+
+    import matplotlib.pyplot as plt
+    drags = solver.drag_forces
+    _, axs = plt.subplots(1,3)
+    axs[0].plot(range(drags.shape[0]), drags, 'k-')
+    axs[0].set_title("Drag forces")
+    lifts = solver.lift_forces
+    axs[1].plot(range(lifts.shape[0]), lifts, 'k-')
+    axs[1].set_title("Lift forces")
+    p_diffs = solver.pressure_diffs
+    axs[2].plot(range(p_diffs.shape[0]), p_diffs, 'k-')
+    axs[2].set_title("Pressure differences")
+    plt.show()
 
     return
 

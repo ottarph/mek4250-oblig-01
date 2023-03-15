@@ -25,11 +25,11 @@ class implicit_IPCS(NS_Solver):
         
 
         F_us_lhs = ufl.inner(self.u, self.v) * ufl.dx
-        F_us_lhs += self.dt * ufl.inner( ufl.dot(self.u_, ufl.nabla_grad(self.u)), self.v ) * ufl.dx
-        F_us_lhs += self.dt * self.nu * ufl.inner(ufl.grad(self.u), ufl.grad(self.v)) * ufl.dx
+        F_us_lhs += self.k * ufl.inner( ufl.dot(self.u_, ufl.nabla_grad(self.u)), self.v ) * ufl.dx
+        F_us_lhs += self.k * self.nu * ufl.inner(ufl.grad(self.u), ufl.grad(self.v)) * ufl.dx
 
         F_us_rhs = ufl.inner(self.u_, self.v) * ufl.dx
-        F_us_rhs += self.dt / self.rho * self.p_ * ufl.div(self.v) * ufl.dx
+        F_us_rhs += self.k / self.rho * self.p_ * ufl.div(self.v) * ufl.dx
 
         F_us = F_us_lhs - F_us_rhs
         self.a_us = fem.form(ufl.lhs(F_us))
@@ -47,7 +47,7 @@ class implicit_IPCS(NS_Solver):
         self.solver_us.getPC().setType(PETSc.PC.Type.JACOBI)
 
         
-        self.f1 = -self.rho / self.dt * ufl.div(self.u_s)
+        self.f1 = -self.rho / self.k * ufl.div(self.u_s)
 
         self.a_phi = fem.form(ufl.inner(ufl.grad(self.p), ufl.grad(self.q)) * ufl.dx)
         self.l_phi = fem.form(self.f1 * self.q * ufl.dx)
@@ -67,7 +67,7 @@ class implicit_IPCS(NS_Solver):
 
         F_uc_lhs = ufl.inner(self.u, self.v) * ufl.dx
         F_uc_rhs = ufl.inner(self.u_s, self.v) * ufl.dx
-        F_uc_rhs -= self.dt/self.rho * ufl.inner(ufl.grad(self.phi), self.v) * ufl.dx
+        F_uc_rhs -= self.k/self.rho * ufl.inner(ufl.grad(self.phi), self.v) * ufl.dx
         self.a_uc = fem.form(ufl.lhs(F_uc_lhs - F_uc_rhs))
         self.l_uc = fem.form(ufl.rhs(F_uc_lhs - F_uc_rhs))
         """ Variational problem to compute u_ from phi, u_s. """
@@ -150,10 +150,10 @@ def main():
     from helpers.solutions import ex02_inlet_flow_BC as inlet_flow_BC
 
     gmsh.initialize()
-    mesh, ct, ft = create_mesh_variable(triangles=True, lf=1.0)
+    # mesh, ct, ft = create_mesh_variable(triangles=True, lf=1.0)
     h = 0.04
-    dt = 1 / 160 * 10
-    # mesh, ct, ft = create_mesh_static(h=h, triangles=True)
+    dt = 1 / 1600
+    mesh, ct, ft = create_mesh_static(h=h, triangles=True)
     gmsh.finalize()
     
     V_el = ufl.VectorElement("CG", mesh.ufl_cell(), 2)
@@ -165,26 +165,28 @@ def main():
     """ 2D-2, unsteady flow """
 
     solver = implicit_IPCS(0.0,
-        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=5.0,
+        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=1.0,
         log_interval=100,
         fname="output/SI_IPCS.xdmf", data_fname="data/SI_IPCS.npy",
+        # fname=None, data_fname=None,
         do_warm_up=False, warm_up_iterations=20
     )
 
     solver.run()
 
-    import matplotlib.pyplot as plt
-    drags = solver.drag_forces
-    _, axs = plt.subplots(1,3)
-    axs[0].plot(range(drags.shape[0]), drags, 'k-')
-    axs[0].set_title("Drag forces")
-    lifts = solver.lift_forces
-    axs[1].plot(range(lifts.shape[0]), lifts, 'k-')
-    axs[1].set_title("Lift forces")
-    p_diffs = solver.pressure_diffs
-    axs[2].plot(range(p_diffs.shape[0]), p_diffs, 'k-')
-    axs[2].set_title("Pressure differences")
-    plt.show()
+    if solver.data_fname is not None:
+        import matplotlib.pyplot as plt
+        drags = solver.drag_forces
+        _, axs = plt.subplots(1,3)
+        axs[0].plot(range(drags.shape[0]), drags, 'k-')
+        axs[0].set_title("Drag forces")
+        lifts = solver.lift_forces
+        axs[1].plot(range(lifts.shape[0]), lifts, 'k-')
+        axs[1].set_title("Lift forces")
+        p_diffs = solver.pressure_diffs
+        axs[2].plot(range(p_diffs.shape[0]), p_diffs, 'k-')
+        axs[2].set_title("Pressure differences")
+        plt.show()
 
     return
 
