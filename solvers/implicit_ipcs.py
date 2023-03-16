@@ -40,12 +40,7 @@ class implicit_IPCS(NS_Solver):
         self.A_us.assemble()
         self.b_us = fem.petsc.create_vector(self.l_us)
 
-        self.solver_us = PETSc.KSP().create(self.mesh.comm)
-        self.solver_us.setOperators(self.A_us)
-        self.solver_us.setType(PETSc.KSP.Type.BCGS)
-        self.solver_us.getPC().setType(PETSc.PC.Type.JACOBI)
 
-        
         self.f1 = -self.rho / self.k * ufl.div(self.u_s)
 
         self.a_phi = fem.form(ufl.inner(ufl.grad(self.p), ufl.grad(self.q)) * ufl.dx)
@@ -56,12 +51,6 @@ class implicit_IPCS(NS_Solver):
         self.A_phi = fem.petsc.assemble_matrix(self.a_phi, bcs=self.bcs_phi)
         self.A_phi.assemble()
         self.b_phi = fem.petsc.create_vector(self.l_phi)
-
-        self.solver_phi = PETSc.KSP().create(self.mesh.comm)
-        self.solver_phi.setOperators(self.A_phi)
-        self.solver_phi.setType(PETSc.KSP.Type.MINRES)
-        self.solver_phi.getPC().setType(PETSc.PC.Type.HYPRE)
-        self.solver_phi.getPC().setHYPREType("boomeramg")
 
 
         F_uc_lhs = ufl.inner(self.u, self.v) * ufl.dx
@@ -75,10 +64,23 @@ class implicit_IPCS(NS_Solver):
         self.A_uc.assemble()
         self.b_uc = fem.petsc.create_vector(self.l_uc)
 
+            
+        self.solver_us = PETSc.KSP().create(self.mesh.comm)
+        self.solver_us.setOperators(self.A_us)
+        self.solver_us.setType(PETSc.KSP.Type.BCGS)
+        self.solver_us.getPC().setType(PETSc.PC.Type.JACOBI)
+
+        self.solver_phi = PETSc.KSP().create(self.mesh.comm)
+        self.solver_phi.setOperators(self.A_phi)
+        self.solver_phi.setType(PETSc.KSP.Type.CG)
+        self.solver_phi.getPC().setType(PETSc.PC.Type.HYPRE)
+        self.solver_phi.getPC().setHYPREType("boomeramg")
+
         self.solver_uc = PETSc.KSP().create(self.mesh.comm)
         self.solver_uc.setOperators(self.A_uc)
+        self.solver_uc.getPC().setType(PETSc.PC.Type.JACOBI)
         self.solver_uc.setType(PETSc.KSP.Type.CG)
-        self.solver_uc.getPC().setType(PETSc.PC.Type.SOR)
+
 
         self.u_maxs = []
 
@@ -99,7 +101,6 @@ class implicit_IPCS(NS_Solver):
                             mode=PETSc.ScatterMode.REVERSE)
         fem.petsc.set_bc(self.b_us, self.bcs_us) 
 
-
         self.solver_us.solve(self.b_us, self.u_s.vector)
         self.u_s.x.scatter_forward()
 
@@ -115,7 +116,6 @@ class implicit_IPCS(NS_Solver):
                             mode=PETSc.ScatterMode.REVERSE)
         fem.petsc.set_bc(self.b_phi, self.bcs_phi)    
 
-
         # Solve linear problem
         self.solver_phi.solve(self.b_phi, self.phi.vector)
         self.phi.x.scatter_forward()
@@ -130,7 +130,6 @@ class implicit_IPCS(NS_Solver):
         fem.petsc.assemble_vector(self.b_uc, self.l_uc)
         self.b_uc.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, 
                               mode=PETSc.ScatterMode.REVERSE)
-
         self.solver_uc.solve(self.b_uc, self.u_.vector)
         self.u_.x.scatter_forward()
 
@@ -149,9 +148,11 @@ def main():
     from helpers.solutions import ex02_inlet_flow_BC as inlet_flow_BC
 
     gmsh.initialize()
-    # mesh, ct, ft = create_mesh_variable(triangles=True, lf=1.0)
-    h = 0.04
+    gmsh.option.setNumber("General.Verbosity", 0)
+    # mesh, ct, ft = create_mesh_variable(triangles=True, lf=1.7)
+    h = 0.01
     dt = 1 / 160
+    # print(f"{dt=}")
     mesh, ct, ft = create_mesh_static(h=h, triangles=True)
     gmsh.finalize()
     
@@ -167,7 +168,6 @@ def main():
         mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=1.0,
         log_interval=100,
         fname="output/SI_IPCS.xdmf", data_fname="data/SI_IPCS.npy",
-        # fname=None, data_fname=None,
         do_warm_up=False, warm_up_iterations=20
     )
 
