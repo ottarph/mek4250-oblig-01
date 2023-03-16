@@ -236,6 +236,11 @@ class NS_Solver:
     
     def check_blow_up(self):
         return np.amax(self.u_.vector.array) > 1e3
+    
+    def compute_energy(self):
+        energy_form = fem.form(0.5 * self.rho * ufl.inner(self.u_, self.u_) * ufl.dx)
+        energy = fem.assemble_scalar(energy_form)
+        return self.mesh.comm.reduce(energy, op=MPI.SUM, root=0)
 
     def run(self):
 
