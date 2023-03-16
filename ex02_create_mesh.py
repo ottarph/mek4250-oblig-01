@@ -168,14 +168,79 @@ def create_mesh_static(h=0.05, triangles=True):
     return mesh, ct, ft
 
 
+def create_mesh_basic(h=0.05, triangles=True):
+
+    # Rectangle dimensions
+    L = 2.2
+    H = 0.41
+
+
+
+    gdim = 2
+    fluid_marker = 1
+    inlet_marker = 2
+    outlet_marker = 3
+    wall_marker = 4
+    inflow, outflow, walls = [], [], []
+
+    mesh_comm = MPI.COMM_WORLD
+    model_rank = 0
+    if mesh_comm.rank == model_rank:
+        rectangle = gmsh.model.occ.addRectangle(0, 0, 0, L, H)
+
+        # fluid = gmsh.model.occ.cut([(gdim, rectangle)], [(gdim, cylinder_obstacle)])
+        gmsh.model.occ.synchronize()
+
+        volumes = gmsh.model.getEntities(dim=gdim)
+        assert(len(volumes) == 1)
+        gmsh.model.addPhysicalGroup(volumes[0][0], [volumes[0][1]], fluid_marker)
+
+        boundaries = gmsh.model.getBoundary(volumes, oriented=False)
+        for boundary in boundaries:
+            center_of_mass = gmsh.model.occ.getCenterOfMass(boundary[0], boundary[1])
+            if np.allclose(center_of_mass, [0, H/2, 0]):
+                inflow.append(boundary[1])
+            elif np.allclose(center_of_mass, [L, H/2, 0]):
+                outflow.append(boundary[1])
+            elif np.allclose(center_of_mass, [L/2, H, 0]) or np.allclose(center_of_mass, [L/2, 0, 0]):
+                walls.append(boundary[1])
+            # else:
+            #     obstacle.append(boundary[1])
+        gmsh.model.addPhysicalGroup(1, walls, wall_marker)
+        gmsh.model.setPhysicalName(1, wall_marker, "Walls")
+        gmsh.model.addPhysicalGroup(1, inflow, inlet_marker)
+        gmsh.model.setPhysicalName(1, inlet_marker, "Inlet")
+        gmsh.model.addPhysicalGroup(1, outflow, outlet_marker)
+        gmsh.model.setPhysicalName(1, outlet_marker, "Outlet")
+        # gmsh.model.addPhysicalGroup(1, obstacle, obstacle_marker)
+        # gmsh.model.setPhysicalName(1, obstacle_marker, "Obstacle")
+
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", h)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", h)
+
+        gmsh.model.mesh.generate(gdim)
+        gmsh.model.mesh.setOrder(2)
+        
+        gmsh.model.mesh.optimize("Netgen")
+        
+
+    mesh, ct, ft = io.gmshio.model_to_mesh(gmsh.model, mesh_comm, model_rank, gdim=gdim)
+    ft.name = "Facet markers"
+
+    return mesh, ct, ft
+
+
 
 def main():
 
     gmsh.initialize()
 
     triangles = True
-    mesh, ct, ft = create_mesh_variable(triangles=triangles, lf=0.5)
-    # mesh, ct, ft = create_mesh_static(h=0.05, triangles=triangles)
+    # mesh, ct, ft = create_mesh_variable(triangles=triangles, lf=0.5)
+    # mesh, ct, ft = create_mesh_static(h=0.41/2, triangles=triangles)
+    mesh, ct, ft = create_mesh_basic(h=0.40/4, triangles=triangles)
+    print(dir(ft))
+    print(ft.values)
 
     gmsh.finalize()
 

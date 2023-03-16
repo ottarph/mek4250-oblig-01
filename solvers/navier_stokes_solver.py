@@ -162,12 +162,13 @@ class NS_Solver:
             ), self.V
         )
 
-        bc_u_nonslip_obstacle = fem.dirichletbc(
-            fem.Constant(self.mesh, PETSc.ScalarType((0.0, 0.0))),
-            fem.locate_dofs_topological(
-                self.V, fdim, self.facet_tags.find(self.obstacle_marker)
-            ), self.V
-        )
+        if max(self.facet_tags.values) == 5:
+            bc_u_nonslip_obstacle = fem.dirichletbc(
+                fem.Constant(self.mesh, PETSc.ScalarType((0.0, 0.0))),
+                fem.locate_dofs_topological(
+                    self.V, fdim, self.facet_tags.find(self.obstacle_marker)
+                ), self.V
+            )
 
         bc_p_outlet = fem.dirichletbc(
             fem.Constant(self.mesh, PETSc.ScalarType(0.0)),
@@ -176,11 +177,17 @@ class NS_Solver:
             ), self.Q
         )
 
-        bcs_u = {
-            "inlet": bc_u_inlet,
-            "walls": bc_u_nonslip_walls,
-            "obstacle": bc_u_nonslip_obstacle
-        }
+        if max(self.facet_tags.values) == 5:
+            bcs_u = {
+                "inlet": bc_u_inlet,
+                "walls": bc_u_nonslip_walls,
+                "obstacle": bc_u_nonslip_obstacle
+            }
+        else:
+            bcs_u = {
+                "inlet": bc_u_inlet,
+                "walls": bc_u_nonslip_walls
+            }
         bcs_p = {"outlet": bc_p_outlet}
 
         return bcs_u, bcs_p

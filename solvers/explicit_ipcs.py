@@ -34,7 +34,7 @@ class explicit_IPCS(NS_Solver):
         F_us = F_us_lhs - F_us_rhs
         self.a_us = fem.form(ufl.lhs(F_us))
         self.l_us = fem.form(ufl.rhs(F_us))
-        self.bcs_us = [self.bcs_u["inlet"], self.bcs_u["walls"], self.bcs_u["obstacle"]]
+        self.bcs_us = list(self.bcs_u.values())
         """ Variational problem to compute u_s from u_, p_ """
 
         self.A_us = fem.petsc.assemble_matrix(self.a_us, bcs=self.bcs_us)
@@ -46,7 +46,7 @@ class explicit_IPCS(NS_Solver):
 
         self.a_phi = fem.form(ufl.inner(ufl.grad(self.p), ufl.grad(self.q)) * ufl.dx)
         self.l_phi = fem.form(self.f1 * self.q * ufl.dx)
-        self.bcs_phi = [self.bcs_p["outlet"]]
+        self.bcs_phi = list(self.bcs_p.values())
         """ Variational problem to compute phi from u_s """
 
         self.A_phi = fem.petsc.assemble_matrix(self.a_phi, bcs=self.bcs_phi)
@@ -81,8 +81,6 @@ class explicit_IPCS(NS_Solver):
         self.solver_uc.setOperators(self.A_uc)
         self.solver_uc.getPC().setType(PETSc.PC.Type.JACOBI)
         self.solver_uc.setType(PETSc.KSP.Type.CG)
-
-        # self.u_maxs = []
 
         return
     
@@ -167,9 +165,9 @@ def main():
     """ 2D-2, unsteady flow """
 
     solver = explicit_IPCS(
-        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=1.0,
-        log_interval=100,
-        fname="output/E_IPCS.xdmf", data_fname="data/E_IPCS.npy",
+        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=0.1,
+        log_interval=10,
+        # fname="output/E_IPCS.xdmf", data_fname="data/E_IPCS.npy",
         do_warm_up=False, warm_up_iterations=20
     )
 

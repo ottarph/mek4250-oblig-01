@@ -33,7 +33,7 @@ class implicit_IPCS(NS_Solver):
         F_us = F_us_lhs - F_us_rhs
         self.a_us = fem.form(ufl.lhs(F_us))
         self.l_us = fem.form(ufl.rhs(F_us))
-        self.bcs_us = [self.bcs_u["inlet"], self.bcs_u["walls"], self.bcs_u["obstacle"]]
+        self.bcs_us = list(self.bcs_u.values())
         """ Variational problem to compute u_s from u_, p_ """
 
         self.A_us = fem.petsc.assemble_matrix(self.a_us, bcs=self.bcs_us)
@@ -45,7 +45,7 @@ class implicit_IPCS(NS_Solver):
 
         self.a_phi = fem.form(ufl.inner(ufl.grad(self.p), ufl.grad(self.q)) * ufl.dx)
         self.l_phi = fem.form(self.f1 * self.q * ufl.dx)
-        self.bcs_phi = [self.bcs_p["outlet"]]
+        self.bcs_phi = list(self.bcs_p.values())
         """ Variational problem to compute phi from u_s """
 
         self.A_phi = fem.petsc.assemble_matrix(self.a_phi, bcs=self.bcs_phi)
@@ -80,9 +80,6 @@ class implicit_IPCS(NS_Solver):
         self.solver_uc.setOperators(self.A_uc)
         self.solver_uc.getPC().setType(PETSc.PC.Type.JACOBI)
         self.solver_uc.setType(PETSc.KSP.Type.CG)
-
-
-        self.u_maxs = []
 
         return
     
@@ -144,16 +141,17 @@ class implicit_IPCS(NS_Solver):
 def main():
 
     import gmsh
-    from ex02_create_mesh import create_mesh_variable, create_mesh_static
+    from ex02_create_mesh import create_mesh_variable, create_mesh_static, create_mesh_basic
     from helpers.solutions import ex02_inlet_flow_BC as inlet_flow_BC
 
     gmsh.initialize()
     gmsh.option.setNumber("General.Verbosity", 0)
-    # mesh, ct, ft = create_mesh_variable(triangles=True, lf=1.7)
-    h = 0.01
+    # mesh, ct, ft = create_mesh_variable(triangles=True, lf=1.0)
+    h = 0.05
     dt = 1 / 160
     # print(f"{dt=}")
-    mesh, ct, ft = create_mesh_static(h=h, triangles=True)
+    # mesh, ct, ft = create_mesh_static(h=h, triangles=True)
+    mesh, ct, ft = create_mesh_basic(h=h, triangles=True)
     gmsh.finalize()
     
     V_el = ufl.VectorElement("CG", mesh.ufl_cell(), 2)
@@ -165,13 +163,15 @@ def main():
     """ 2D-2, unsteady flow """
 
     solver = implicit_IPCS(
-        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=1.0,
-        log_interval=100,
+        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=2.5,
+        log_interval=10,
         fname="output/SI_IPCS.xdmf", data_fname="data/SI_IPCS.npy",
         do_warm_up=False, warm_up_iterations=20
     )
 
     solver.run()
+
+    print(solver.compute_energy())
 
     if solver.data_fname is not None:
         import matplotlib.pyplot as plt
