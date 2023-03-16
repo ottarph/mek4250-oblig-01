@@ -7,8 +7,6 @@ from petsc4py import PETSc
 
 from solvers.navier_stokes_solver import NS_Solver
 
-from timeit import default_timer as timer
-
 
 class explicit_IPCS(NS_Solver):
 
@@ -68,53 +66,27 @@ class explicit_IPCS(NS_Solver):
         self.b_uc = fem.petsc.create_vector(self.l_uc)
 
 
-        self.b_time_us = 0.0
-        self.solve_time_us = 0.0
-        self.b_time_phi = 0.0
-        self.solve_time_phi = 0.0
-        self.b_time_uc = 0.0
-        self.solve_time_uc = 0.0
-        self.per_it = 0.0
-
-
         self.solver_us = PETSc.KSP().create(self.mesh.comm)
         self.solver_us.setOperators(self.A_us)
-        # self.solver_us.setType(PETSc.KSP.Type.BCGS)
         self.solver_us.getPC().setType(PETSc.PC.Type.JACOBI)
         self.solver_us.setType(PETSc.KSP.Type.CG)
-        # self.solver_us.getPC().setType(PETSc.PC.Type.HYPRE)
-        # self.solver_us.getPC().setHYPREType("boomeramg")
-        """ CG+Jacobi best of the tested """
 
         self.solver_phi = PETSc.KSP().create(self.mesh.comm)
         self.solver_phi.setOperators(self.A_phi)
-        # self.solver_phi.setType(PETSc.KSP.Type.MINRES)
-        # self.solver_phi.getPC().setType(PETSc.PC.Type.HYPRE)
-        # self.solver_phi.getPC().setHYPREType("boomeramg")
         self.solver_phi.setType(PETSc.KSP.Type.CG)
-        # self.solver_phi.getPC().setType(PETSc.PC.Type.SOR)
         self.solver_phi.getPC().setType(PETSc.PC.Type.HYPRE)
         self.solver_phi.getPC().setHYPREType("boomeramg")
-        """ Normal laplace problem, reasons to believe CG+AMG is good.
-            Best of those tested. """
 
         self.solver_uc = PETSc.KSP().create(self.mesh.comm)
         self.solver_uc.setOperators(self.A_uc)
-        # self.solver_uc.setType(PETSc.KSP.Type.CG)
-        # self.solver_uc.getPC().setType(PETSc.PC.Type.SOR)
         self.solver_uc.getPC().setType(PETSc.PC.Type.JACOBI)
         self.solver_uc.setType(PETSc.KSP.Type.CG)
-        # self.solver_phi.getPC().setType(PETSc.PC.Type.HYPRE)
-        # self.solver_phi.getPC().setHYPREType("boomeramg")
-        """ CG+JACOBI best of the tested. """
 
         # self.u_maxs = []
 
         return
     
     def step(self):
-        
-        it_start = timer()
 
         # Don't need to update the left hand side matrix for the explicit stepping.
         # self.A_us.zeroEntries()
@@ -124,26 +96,19 @@ class explicit_IPCS(NS_Solver):
 
         with self.b_us.localForm() as loc_b:
             loc_b.set(0)
-        start = timer()
         fem.petsc.assemble_vector(self.b_us, self.l_us)
         fem.petsc.apply_lifting(self.b_us, [self.a_us], [self.bcs_us])
         self.b_us.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, 
                             mode=PETSc.ScatterMode.REVERSE)
         fem.petsc.set_bc(self.b_us, self.bcs_us) 
-        end = timer()
-        self.b_time_us += end - start
 
-        start = timer()
         self.solver_us.solve(self.b_us, self.u_s.vector)
-        end = timer()
-        self.solve_time_us += end - start
         self.u_s.x.scatter_forward()
 
 
         # Update the right hand side reusing the initial vector
         with self.b_phi.localForm() as loc_b:
             loc_b.set(0)
-        start = timer()
         fem.petsc.assemble_vector(self.b_phi, self.l_phi)
 
         # Apply Dirichlet boundary condition to the vector
@@ -151,14 +116,9 @@ class explicit_IPCS(NS_Solver):
         self.b_phi.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, 
                             mode=PETSc.ScatterMode.REVERSE)
         fem.petsc.set_bc(self.b_phi, self.bcs_phi)    
-        end = timer()
-        self.b_time_phi += end - start
 
         # Solve linear problem
-        start = timer()
         self.solver_phi.solve(self.b_phi, self.phi.vector)
-        end = timer()
-        self.solve_time_phi += end - start
         self.phi.x.scatter_forward()
 
 
@@ -168,20 +128,12 @@ class explicit_IPCS(NS_Solver):
 
         with self.b_uc.localForm() as loc_b:
             loc_b.set(0)
-        start = timer()
         fem.petsc.assemble_vector(self.b_uc, self.l_uc)
         self.b_uc.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, 
                               mode=PETSc.ScatterMode.REVERSE)
-        end = timer()
-        self.b_time_uc += end - start
-        start = timer()
+        
         self.solver_uc.solve(self.b_uc, self.u_.vector)
-        end = timer()
-        self.solve_time_uc += end - start
         self.u_.x.scatter_forward()
-
-        it_end = timer()
-        self.per_it += it_end - it_start
 
         return
     
@@ -200,8 +152,8 @@ def main():
     gmsh.initialize()
     gmsh.option.setNumber("General.Verbosity", 0)
     # mesh, ct, ft = create_mesh_variable(triangles=True, lf=1.7)
-    h = 0.0025
-    dt = 1 / 1600 / 10 / 10
+    h = 0.01
+    dt = 1 / 1600
     # print(f"{dt=}")
     mesh, ct, ft = create_mesh_static(h=h, triangles=True)
     gmsh.finalize()
@@ -215,25 +167,13 @@ def main():
     """ 2D-2, unsteady flow """
 
     solver = explicit_IPCS(
-        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=20*dt,
-        log_interval=2,
-        # fname="output/E_IPCS.xdmf", data_fname="data/E_IPCS.npy",
+        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=1.0,
+        log_interval=100,
+        fname="output/E_IPCS.xdmf", data_fname="data/E_IPCS.npy",
         do_warm_up=False, warm_up_iterations=20
     )
 
     solver.run()
-
-    print(f"Explicit IPCS: {h=}")
-    print(f"per it: {(solver.per_it / solver.it):.3e} s/it")
-    print()
-    print(f"b: u_s: {(solver.b_time_us / solver.it):.3e} s/it")
-    print(f"b: phi: {(solver.b_time_phi / solver.it):.3e} s/it")
-    print(f"b: u_c: {(solver.b_time_uc / solver.it):.3e} s/it")
-    print()
-    print(f"A: u_s: {(solver.solve_time_us / solver.it):.3e} s/it")
-    print(f"A: phi: {(solver.solve_time_phi / solver.it):.3e} s/it")
-    print(f"A: u_c: {(solver.solve_time_uc / solver.it):.3e} s/it")
-
 
     if solver.data_fname is not None:
         import matplotlib.pyplot as plt
