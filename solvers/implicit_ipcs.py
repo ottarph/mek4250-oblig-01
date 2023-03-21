@@ -149,25 +149,37 @@ def main():
 
     gmsh.initialize()
     gmsh.option.setNumber("General.Verbosity", 0)
-    # mesh, ct, ft = create_mesh_variable(triangles=True, lf=1.7)
+    mesh, ct, ft = create_mesh_variable(triangles=True, lf=0.5)
     h = 0.01
-    dt = 1 / 160
+    dt = 1 / 1600
     # print(f"{dt=}")
-    mesh, ct, ft = create_mesh_static(h=h, triangles=True)
+    # mesh, ct, ft = create_mesh_static(h=h, triangles=True)
     gmsh.finalize()
     
     V_el = ufl.VectorElement("CG", mesh.ufl_cell(), 2)
     Q_el = ufl.FiniteElement("CG", mesh.ufl_cell(), 1)
     """ Taylor-Hook P2-P1 elements. """
 
+    V = fem.FunctionSpace(mesh, V_el)
+    Q = fem.FunctionSpace(mesh, Q_el)
+    u = fem.Function(V)
+    q = fem.Function(Q)
+
+    print(f"u: {u.vector.array.shape}, {sum(u.vector.array.shape)}")
+    print(f"q: {q.vector.array.shape}, {sum(q.vector.array.shape)}")
+    print(f"u+q: {sum(u.vector.array.shape) + sum(q.vector.array.shape)}")
+
+    print("mesh (2nd order):", mesh.geometry.x.shape)
+    print("Pressure dof coordinates (P1):", q.function_space.tabulate_dof_coordinates().shape)
+
     U_m = 1.5
     U_inlet = inlet_flow_BC(U_m)
     """ 2D-2, unsteady flow """
 
     solver = implicit_IPCS(
-        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=1.0,
+        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=8.0,
         log_interval=100,
-        fname="output/SI_IPCS.xdmf", data_fname="data/SI_IPCS.npy",
+        # fname="output/SI_IPCS.xdmf", data_fname="data/SI_IPCS.npy",
         do_warm_up=False, warm_up_iterations=20
     )
 
