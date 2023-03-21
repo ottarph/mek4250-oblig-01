@@ -146,12 +146,12 @@ def main():
 
     gmsh.initialize()
     gmsh.option.setNumber("General.Verbosity", 0)
-    # mesh, ct, ft = create_mesh_variable(triangles=True, lf=1.0)
+    mesh, ct, ft = create_mesh_variable(triangles=True, lf=1.0)
     h = 0.05
     dt = 1 / 160
     # print(f"{dt=}")
     # mesh, ct, ft = create_mesh_static(h=h, triangles=True)
-    mesh, ct, ft = create_mesh_basic(h=h, triangles=True)
+    # mesh, ct, ft = create_mesh_basic(h=h, triangles=True)
     gmsh.finalize()
     
     V_el = ufl.VectorElement("CG", mesh.ufl_cell(), 2)
@@ -163,7 +163,7 @@ def main():
     """ 2D-2, unsteady flow """
 
     solver = implicit_IPCS(
-        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=2.5,
+        mesh, ft, V_el, Q_el, U_inlet, dt=dt, T=1.0,
         log_interval=10,
         fname="output/SI_IPCS.xdmf", data_fname="data/SI_IPCS.npy",
         do_warm_up=False, warm_up_iterations=20
