@@ -236,11 +236,9 @@ def main():
     gmsh.initialize()
 
     triangles = True
-    # mesh, ct, ft = create_mesh_variable(triangles=triangles, lf=0.5)
+    mesh, ct, ft = create_mesh_variable(triangles=triangles, lf=1.5)
     # mesh, ct, ft = create_mesh_static(h=0.41/2, triangles=triangles)
-    mesh, ct, ft = create_mesh_basic(h=0.40/4, triangles=triangles)
-    print(dir(ft))
-    print(ft.values)
+    # mesh, ct, ft = create_mesh_basic(h=0.40/4, triangles=triangles)
 
     gmsh.finalize()
 
