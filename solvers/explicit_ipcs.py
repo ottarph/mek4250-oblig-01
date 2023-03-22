@@ -144,7 +144,7 @@ class explicit_IPCS(NS_Solver):
 def main():
 
     import gmsh
-    from ex02_create_mesh import create_mesh_variable, create_mesh_static
+    from helpers.ex02_create_mesh import create_mesh_variable, create_mesh_static
     from helpers.solutions import ex02_inlet_flow_BC as inlet_flow_BC
 
     gmsh.initialize()

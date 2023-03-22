@@ -37,7 +37,7 @@ def create_problem(mesh, ft):
 
 def main():
 
-    from ex02_create_mesh import create_mesh_static, create_mesh_variable
+    from helpers.ex02_create_mesh import create_mesh_static, create_mesh_variable
 
     triangles = True
 

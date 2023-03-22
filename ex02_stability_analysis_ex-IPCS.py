@@ -7,7 +7,7 @@ import ufl
 from solvers.navier_stokes_solver import NS_Solver
 from solvers.explicit_ipcs import explicit_IPCS
 
-from ex02_create_mesh import create_mesh_basic
+from helpers.ex02_create_mesh import create_mesh_basic
 from helpers.solutions import ex02_inlet_flow_BC as inlet_flow_BC
 
 
