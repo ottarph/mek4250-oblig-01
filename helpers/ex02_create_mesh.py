@@ -14,6 +14,9 @@ from dolfinx import io
 import gmsh
 
 def create_mesh_variable(triangles=True, lf=1.0):
+    """
+    `lf`: Characteristic length factor
+    """
 
     # Rectangle dimensions
     L = 2.2
