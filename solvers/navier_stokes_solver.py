@@ -214,11 +214,12 @@ class NS_Solver:
             for _ in range(self.warm_up_iterations):
                 self.step()
 
-        self.callback()
-
         if self.fname is not None:
             self.xdmf.write_function(self.u_, self.t0)
             self.xdmf.write_function(self.p_, self.t0)
+
+        self.callback()
+
 
         if self.data_fname is not None:
             self.ts[0] = self.t0
