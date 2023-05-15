@@ -214,6 +214,8 @@ class NS_Solver:
             for _ in range(self.warm_up_iterations):
                 self.step()
 
+        self.callback()
+
         if self.fname is not None:
             self.xdmf.write_function(self.u_, self.t0)
             self.xdmf.write_function(self.p_, self.t0)
@@ -248,6 +250,9 @@ class NS_Solver:
         energy_form = fem.form(0.5 * self.rho * ufl.inner(self.u_, self.u_) * ufl.dx)
         energy = fem.assemble_scalar(energy_form)
         return self.mesh.comm.reduce(energy, op=MPI.SUM, root=0)
+    
+    def callback(self):
+        pass
 
     def run(self):
 
@@ -271,6 +276,7 @@ class NS_Solver:
                 self.xdmf.write_function(self.u_, self.t)
                 self.xdmf.write_function(self.p_, self.t)
 
+            self.callback()
             self.log()
 
             if self.check_blow_up():
